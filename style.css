@@ -4,6 +4,7 @@
   --ben-bg:#EEEDFE; --ben-fg:#3C3489; --ben-bd:#7F77DD;
   --sarah-bg:#EAF3DE; --sarah-fg:#27500A; --sarah-bd:#639922;
   --both-bg:#FCEBEB; --both-fg:#791F1F; --both-bd:#E24B4A;
+  --work-bg:#FAEEDA; --work-fg:#633806; --work-bd:#BA7517;
   --hour:60px; --gutter:48px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -42,7 +43,7 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 #events::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed var(--line)}
 
 .ev{position:absolute;border-radius:10px;padding:4px 7px;font-size:13px;overflow:hidden;
-  border-left:4px solid;line-height:1.3;cursor:pointer;
+  border-left:4px solid;border-right:4px solid;line-height:1.3;cursor:pointer;
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .ev.moving{z-index:20;transform:scale(1.04);box-shadow:0 8px 20px rgba(74,58,63,.25);opacity:.95;overflow:visible}
 .move-label{position:absolute;right:4px;top:-22px;background:var(--text);color:var(--bg);font-size:12px;
@@ -51,8 +52,9 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 .ev small{display:block;font-size:11px;opacity:.8}
 .ev.ben{background:var(--ben-bg);color:var(--ben-fg);border-color:var(--ben-bd)}
 .ev.sarah{background:var(--sarah-bg);color:var(--sarah-fg);border-color:var(--sarah-bd)}
-.ev.both{background:var(--both-bg);color:var(--both-fg);border-color:var(--both-bd);z-index:2;
-  box-shadow:0 0 0 2px var(--card)}
+.ev.both,.ev.work{z-index:2;box-shadow:0 0 0 2px var(--card);text-align:center}
+.ev.both{background:var(--both-bg);color:var(--both-fg);border-color:var(--both-bd)}
+.ev.work{background:var(--work-bg);color:var(--work-fg);border-color:var(--work-bd)}
 .now{position:absolute;left:-6px;right:0;border-top:2px solid var(--text);z-index:5;pointer-events:none}
 .now::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--text)}
 
@@ -60,12 +62,13 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 .tray-head{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:600;margin-bottom:8px}
 .tray-head b{color:var(--muted);font-weight:500}
 #chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{white-space:nowrap;padding:9px 12px;border-radius:12px;font-size:14px;border-left:4px solid;
+.chip{white-space:nowrap;padding:9px 12px;border-radius:12px;font-size:14px;border-left:4px solid;border-right:4px solid;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .chip small{opacity:.7;margin-left:4px}
 .chip.ben{background:var(--ben-bg);color:var(--ben-fg);border-color:var(--ben-bd)}
 .chip.sarah{background:var(--sarah-bg);color:var(--sarah-fg);border-color:var(--sarah-bd)}
 .chip.both{background:var(--both-bg);color:var(--both-fg);border-color:var(--both-bd)}
+.chip.work{background:var(--work-bg);color:var(--work-fg);border-color:var(--work-bd)}
 .chip.lifted{opacity:.3}
 .ghost{position:fixed;z-index:50;pointer-events:none;transform:translate(-50%,-120%) scale(1.05);
   box-shadow:0 6px 16px rgba(0,0,0,.18)}
@@ -82,11 +85,12 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 #sheet input,#sheet select{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:12px;
   border:1px solid var(--line);background:#fff;color:var(--text);-webkit-appearance:none;appearance:none}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.seg button{padding:10px 0;border-radius:12px;border:2px solid transparent;background:var(--soft);font-size:15px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg button{padding:10px 0;border-radius:12px;border:2px solid transparent;background:var(--soft);font-size:14px;white-space:nowrap}
 .seg button.on.ben{background:var(--ben-bg);color:var(--ben-fg);border-color:var(--ben-bd)}
 .seg button.on.sarah{background:var(--sarah-bg);color:var(--sarah-fg);border-color:var(--sarah-bd)}
 .seg button.on.both{background:var(--both-bg);color:var(--both-fg);border-color:var(--both-bd)}
+.seg button.on.work{background:var(--work-bg);color:var(--work-fg);border-color:var(--work-bd)}
 .hint{font-size:12px;color:var(--muted);margin:8px 0 0}
 .err{font-size:13px;color:var(--both-bd);margin:8px 0 0;min-height:1em}
 .btns{display:flex;flex-direction:column;gap:8px;margin-top:16px}
