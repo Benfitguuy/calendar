@@ -1,9 +1,9 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
-const NAMES = { ben: '👦 Ben', sarah: '👧 Sarah', both: '♥ 一起', work: '💼 公事' };
+const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
 const OWNERS = ['ben', 'sarah', 'both', 'work'];
 const isShared = o => o === 'both' || o === 'work';   // 橫跨兩欄的行程
 const REPEAT = { none: '不重複', daily: '每天', weekdays: '平日（週一到五）', weekly: '每週同一天' };
@@ -418,5 +418,173 @@ function bindMove() {
   window.addEventListener('mouseup', evEnd);
 }
 
-buildHours(); bind(); bindMove(); render(); scrollToNow();
+// ====================================================================
+// 月曆＋經期紀錄
+// 經期資料「只存在這支手機」（獨立的 Private），之後接雲端同步也不會上傳。
+// ====================================================================
+const Private = {
+  KEY: 'our-calendar-private-v1',
+  load() { try { return JSON.parse(localStorage.getItem(this.KEY)); } catch (e) { return null; } },
+  save(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch (e) { toast('存檔失敗'); } }
+};
+let pv = Private.load() || { periods: [], logs: {} };
+const savePv = () => Private.save(pv);
+const diffDays = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 86400000);
+const md = s => `${parseYmd(s).getMonth() + 1}/${parseYmd(s).getDate()}`;
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+const FLOW = ['少', '中', '多'];
+const PAIN = ['沒有', '輕微', '中等', '嚴重'];
+const MOOD = ['😄', '🙂', '😐', '😣', '😢'];
+
+function cycleStats() {
+  const starts = pv.periods.map(p => p.start).sort();
+  const cyc = [];
+  for (let i = 1; i < starts.length; i++) { const d = diffDays(starts[i - 1], starts[i]); if (d >= 15 && d <= 60) cyc.push(d); }
+  const c6 = cyc.slice(-6);
+  const lens = pv.periods.filter(p => p.end).sort((a, b) => a.start < b.start ? -1 : 1)
+    .map(p => diffDays(p.start, p.end) + 1).filter(n => n >= 1 && n <= 14).slice(-6);
+  return { starts, avgCycle: c6.length ? Math.round(avg(c6)) : 28, avgLen: lens.length ? Math.round(avg(lens)) : 5,
+    hasData: starts.length > 0, enough: c6.length > 0 };
+}
+function periodEnd(p, st) {           // 還沒按「結束」的經期：先用平均天數顯示，最多 10 天
+  if (p.end) return p.end;
+  const today = ymd(new Date());
+  let e = addDays(p.start, st.avgLen - 1);
+  if (today > e) e = today <= addDays(p.start, 9) ? today : addDays(p.start, 9);
+  return e;
+}
+function periodOn(day, st) { return pv.periods.find(p => day >= p.start && day <= periodEnd(p, st)) || null; }
+function predictions(st) {
+  if (!st.hasData) return [];
+  const today = ymd(new Date());
+  let s = addDays(st.starts[st.starts.length - 1], st.avgCycle);
+  while (addDays(s, st.avgLen - 1) < today) s = addDays(s, st.avgCycle);
+  const out = [];
+  for (let k = 0; k < 4; k++) { out.push(s); s = addDays(s, st.avgCycle); }
+  return out;
+}
+const predictedOn = (day, preds, st) => preds.some(s => day >= s && day <= addDays(s, st.avgLen - 1));
+
+function renderCycleCard(st, preds) {
+  const today = ymd(new Date()), card = $('#cycle-card');
+  if (!st.hasData) { card.innerHTML = '<b>還沒有經期紀錄</b><p>點經期開始的那一天，按「經期這天開始」，之後就會幫你預測下一次。</p>'; return; }
+  const cur = periodOn(today, st);
+  const meta = `<p>平均週期 ${st.avgCycle} 天・經期約 ${st.avgLen} 天${st.enough ? '' : '（記錄兩次以上，預測會更準）'}</p>`;
+  if (cur) { card.innerHTML = `<b>經期第 ${diffDays(cur.start, today) + 1} 天</b>${meta}`; return; }
+  const expected = addDays(st.starts[st.starts.length - 1], st.avgCycle);
+  if (expected < today) {
+    card.innerHTML = `<b>比預測晚了 ${diffDays(expected, today)} 天</b><p>原本預計 ${md(expected)} 開始；來了記得點那天記錄。</p>${meta}`;
+    return;
+  }
+  const n = diffDays(today, preds[0]);
+  card.innerHTML = `<b>下次預計 ${md(preds[0])} 開始</b><p>${n === 0 ? '就是今天' : `還有 ${n} 天`}</p>${meta}`;
+}
+
+let mCur = ymd(new Date()).slice(0, 7);
+function renderMonth() {
+  const [y, m] = mCur.split('-').map(Number);
+  $('#m-title').textContent = `${y}年${m}月`;
+  const first = new Date(y, m - 1, 1), daysIn = new Date(y, m, 0).getDate();
+  const start = addDays(ymd(first), -first.getDay()), cells = Math.ceil((first.getDay() + daysIn) / 7) * 7;
+  const st = cycleStats(), preds = predictions(st), today = ymd(new Date());
+  renderCycleCard(st, preds);
+  let h = '';
+  for (let i = 0; i < cells; i++) {
+    const day = addDays(start, i);
+    const cls = ['mday'];
+    if (day.slice(0, 7) !== mCur) cls.push('out');
+    if (day === today) cls.push('today');
+    const pd = periodOn(day, st);
+    if (pd && (pd.end || day <= today)) cls.push('period');            // 還沒結束的經期，未來的日子用「預測」樣式
+    else if (pd || predictedOn(day, preds, st)) cls.push('predict');
+    const owners = new Set(db.events.filter(e => e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, day)).map(e => e.owner));
+    const dots = OWNERS.filter(o => owners.has(o)).map(o => `<i class="dot ${o}"></i>`).join('');
+    const log = pv.logs[day] && Object.keys(pv.logs[day]).length ? '<span class="logmark">✎</span>' : '';
+    h += `<button class="${cls.join(' ')}" data-day="${day}"><span class="num">${parseYmd(day).getDate()}</span>${log}<span class="dots">${dots}</span></button>`;
+  }
+  $('#mgrid').innerHTML = h;
+}
+
+function openDay(day) {
+  const st = cycleStats(), today = ymd(new Date()), p = periodOn(day, st);
+  const evs = db.events.filter(e => occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
+  const d = parseYmd(day);
+  let html = `<h3>${d.getMonth() + 1}月${d.getDate()}日（${WEEK[d.getDay()]}）</h3>
+    <label>行程</label>
+    <div class="evlist">${evs.length ? evs.map(e => `<button class="evrow ${e.owner}" data-goto="1">
+      <span>${e.start}</span>${esc(e.title)}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
+    <div class="btns"><button id="d-goto">打開這天的時間軸</button></div>
+    <label>經期</label>`;
+  if (p) {
+    const log = pv.logs[day] || {};
+    const opt = (key, arr) => `<div class="opts">${arr.map((t, i) => `<button class="${log[key] === i ? 'on' : ''}" data-k="${key}" data-i="${i}">${t}</button>`).join('')}</div>`;
+    html += `<p class="period-tag">經期第 ${diffDays(p.start, day) + 1} 天${p.end ? '' : '（還沒按結束）'}</p>
+      <label>量</label>${opt('flow', FLOW)}
+      <label>經痛</label>${opt('pain', PAIN)}
+      <label>心情</label>${opt('mood', MOOD)}
+      <label>備註</label><input id="p-note" value="${esc(log.note || '')}" placeholder="例如：腰痠、想吃甜的">
+      <div class="btns">
+        ${p.end === day ? '' : '<button id="p-end">經期在這天結束</button>'}
+        <button class="danger" id="p-del">刪除這次經期紀錄</button>
+        <button id="p-close">完成</button>
+      </div>`;
+  } else if (day > today) {
+    html += `<p class="hint">還沒到的日子不能記錄經期。</p><div class="btns"><button id="p-close">關閉</button></div>`;
+  } else {
+    html += `<div class="btns"><button class="primary" id="p-start">經期這天開始</button><button id="p-close">關閉</button></div>`;
+  }
+  openSheet(html);
+  $('#sheet').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => goDay(day));
+  $('#d-goto').onclick = () => goDay(day);
+  $('#p-close').onclick = () => { if ($('#p-note')) $('#p-note').onchange(); closeSheet(); renderMonth(); };
+  if ($('#p-start')) $('#p-start').onclick = () => {
+    pv.periods.filter(x => !x.end && x.start < day).forEach(x => {   // 上一次忘了按結束 → 自動補上
+      const e1 = addDays(x.start, st.avgLen - 1), e2 = addDays(day, -1); x.end = e1 < e2 ? e1 : e2;
+    });
+    pv.periods.push({ start: day, end: null });
+    savePv(); renderMonth(); openDay(day); toast('已記錄經期開始');
+  };
+  if (!p) return;
+  $('#sheet').querySelectorAll('.opts button').forEach(b => b.onclick = () => {
+    const log = pv.logs[day] = pv.logs[day] || {}, k = b.dataset.k, i = Number(b.dataset.i);
+    if (log[k] === i) delete log[k]; else log[k] = i;
+    if (!Object.keys(log).length) delete pv.logs[day];
+    savePv();
+    b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b && log[k] === i));
+  });
+  $('#p-note').onchange = () => {
+    const v = $('#p-note').value.trim(), log = pv.logs[day] = pv.logs[day] || {};
+    if (v) log.note = v; else delete log.note;
+    if (!Object.keys(log).length) delete pv.logs[day];
+    savePv();
+  };
+  if ($('#p-end')) $('#p-end').onclick = () => { p.end = day; savePv(); renderMonth(); openDay(day); toast('已記錄經期結束'); };
+  $('#p-del').onclick = () => {
+    $('#p-del').outerHTML = '<button class="danger" id="p-del2">確定刪除（不能復原）</button>';
+    $('#p-del2').onclick = () => {
+      const end = periodEnd(p, st);
+      Object.keys(pv.logs).forEach(k => { if (k >= p.start && k <= end) delete pv.logs[k]; });
+      pv.periods = pv.periods.filter(x => x !== p); savePv(); closeSheet(); renderMonth(); toast('已刪除');
+    };
+  };
+}
+
+// ---------- 切換頁面 ----------
+function showPage(name) {
+  $('#page-day').hidden = name !== 'day';
+  $('#page-month').hidden = name !== 'month';
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
+  if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); } else { render(); }
+}
+function goDay(day) { sel = day; closeSheet(); showPage('day'); scrollToNow(); }
+const shiftMonth = n => { const [y, m] = mCur.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); mCur = ymd(d).slice(0, 7); renderMonth(); };
+function bindMonth() {
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showPage(b.dataset.page));
+  $('#m-prev').onclick = () => shiftMonth(-1);
+  $('#m-next').onclick = () => shiftMonth(1);
+  $('#m-today').onclick = () => { mCur = ymd(new Date()).slice(0, 7); renderMonth(); };
+  $('#mgrid').addEventListener('click', e => { const b = e.target.closest('.mday'); if (b) openDay(b.dataset.day); });
+}
+
+buildHours(); bind(); bindMove(); bindMonth(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
