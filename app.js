@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.11.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -132,7 +132,7 @@ function renderEvents() {
 function renderTray() {
   $('#tcount').textContent = db.todos.length ? `（${db.todos.length}）` : '';
   $('#chips').innerHTML = db.todos.length
-    ? db.todos.map(t => `<div class="chip ${t.owner}" data-id="${t.id}">${esc(t.title)}${t.mins ? `<small>${durLabel(t.mins)}</small>` : ''}</div>`).join('')
+    ? db.todos.map(t => `<div class="chip ${t.owner}" data-id="${t.id}">${esc(t.title)}${t.note ? '<small>📝</small>' : ''}</div>`).join('')
     : '<p class="empty">目前沒有待安排的事，按「＋ 新增」加一個吧</p>';
 }
 
@@ -217,8 +217,7 @@ function openEvent(e, preset = {}) {
   };
   if (isNew) return;
   $('#f-back').onclick = () => {
-    const mins = e.end ? Math.max(15, toMin(e.end) - toMin(e.start)) : 0;
-    db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins, note: e.note || '' });
+    db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins: 0, note: e.note || '' });
     removeEvent(e, rep ? 'one' : 'all');
     toast('已移回待安排');
   };
@@ -240,23 +239,14 @@ function removeEvent(e, mode) {
 
 // ---------- 新增／編輯待辦 ----------
 function openTodo(t) {
-  // 跟「新增行程」同一個樣子；日期和開始時間可以不填（不填＝留在待安排）
+  // 待安排只記：要做什麼、是誰的、備註（時間等拖進時間軸再決定）
   const isNew = !t;
-  const v = t || { title: '', owner: 'sarah', mins: 60, note: '' };
-  const opts = [0, 15, 30, 60, 90, 120, 180];
-  if (!opts.includes(v.mins)) opts.push(v.mins), opts.sort((a, b) => a - b);
+  const v = t || { title: '', owner: 'sarah', note: '' };
   openSheet(`
     <h3>${isNew ? '新增待安排' : '編輯待安排'}</h3>
     <label>要做什麼？</label><input id="t-title" value="${esc(v.title)}" placeholder="例如：寄包裹">
     <label>是誰的？</label>${segHtml(v.owner)}
-    <label>日期 <span class="opt-tag">還沒決定可以不填</span></label><input id="t-date" type="date" value="">
-    <div class="row2">
-      <div><label>開始 <span class="opt-tag">可不填</span></label><input id="t-start" type="time" step="300" value=""></div>
-      <div><label>大概要多久</label>
-        <select id="t-mins">${opts.map(m => `<option value="${m}"${m === v.mins ? ' selected' : ''}>${m ? durLabel(m) : '無'}</option>`).join('')}</select></div>
-    </div>
     <label>備註</label><input id="t-note" value="${esc(v.note || '')}" placeholder="例如：郵局 5 點關門">
-    <p class="hint">日期和開始時間都填了，就會直接排進行事曆；沒填就留在下面的「待安排」，之後再拖進去。</p>
     <p class="err" id="t-err"></p>
     <div class="btns">
       <button class="primary" id="t-save">儲存</button>
@@ -265,22 +255,12 @@ function openTodo(t) {
     </div>`);
   bindSeg();
   if (isNew) setTimeout(() => $('#t-title').focus(), 50);
-  $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('input', () => $('#t-err').textContent = ''));
+  $('#t-title').addEventListener('input', () => $('#t-err').textContent = '');
   $('#t-cancel').onclick = closeSheet;
   $('#t-save').onclick = () => {
-    const title = $('#t-title').value.trim(), date = $('#t-date').value, start = $('#t-start').value;
+    const title = $('#t-title').value.trim();
     if (!title) return $('#t-err').textContent = '請先寫要做什麼';
-    if (!!date !== !!start) return $('#t-err').textContent = '日期和開始時間要一起填，或都不填';
-    const data = { title, owner: segValue(), mins: Number($('#t-mins').value), note: $('#t-note').value.trim() };
-    if (date) {                                        // 直接排進行事曆
-      const s0 = toMin(start);
-      if (data.mins && s0 + data.mins > 1439) return $('#t-err').textContent = '超過半夜 12 點了，請改短一點';
-      db.events.push({ id: uid(), title, owner: data.owner, date, start, end: data.mins ? toTime(s0 + data.mins) : '',
-        repeat: 'none', ex: [], note: data.note });
-      if (!isNew) db.todos = db.todos.filter(x => x !== t);
-      save(); closeSheet(); sel = date; render(); toast(`已排進 ${md(date)} ${start}`);
-      return;
-    }
+    const data = { title, owner: segValue(), note: $('#t-note').value.trim(), mins: 0 };
     if (isNew) db.todos.push({ id: uid(), ...data }); else Object.assign(t, data);
     save(); closeSheet(); renderTray(); toast('已儲存');
   };
@@ -321,7 +301,7 @@ function updateDrop() {
   const sc = $('#scroller').getBoundingClientRect(), box = $('#events'), br = box.getBoundingClientRect(), pv = PV;
   const inside = drag.y >= sc.top && drag.y <= sc.bottom && drag.x >= sc.left && drag.x <= sc.right;
   if (!inside) { drag.drop = null; pv.hidden = true; return; }
-  const mins = drag.t.mins || NO_END_MINS;
+  const mins = NO_END_MINS;                  // 待安排沒有時間長度，拖進去只定開始時間
   let start = Math.round(((drag.y - br.top) / HOUR * 60 - 15) / 15) * 15;
   start = Math.max(0, Math.min(1440 - mins, start));
   drag.drop = start;
@@ -330,7 +310,7 @@ function updateDrop() {
   pv.hidden = false;
   pv.className = '';
   pv.style.cssText = `top:${start / 60 * HOUR}px;height:${Math.max(24, mins / 60 * HOUR)}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px);border-color:var(--${o}-bd);color:var(--${o}-fg)`;
-  pv.textContent = drag.t.mins ? `${toTime(start)}–${toTime(start + mins)}` : toTime(start);
+  pv.textContent = toTime(start);
 }
 function onChipUp() {
   if (!drag) return;
@@ -341,7 +321,7 @@ function onChipUp() {
   PV.hidden = true; document.body.appendChild(PV);
   if (d.drop == null) return;
   db.events.push({ id: uid(), title: d.t.title, owner: d.t.owner, date: sel,
-    start: toTime(d.drop), end: d.t.mins ? toTime(Math.min(1439, d.drop + d.t.mins)) : '', repeat: 'none', ex: [], note: d.t.note || '' });
+    start: toTime(d.drop), end: '', repeat: 'none', ex: [], note: d.t.note || '' });
   db.todos = db.todos.filter(x => x !== d.t);
   save(); render(); toast(`已排進 ${toTime(d.drop)}`);
 }
@@ -570,6 +550,13 @@ function renderMonth() {
   $('#mgrid').innerHTML = h;
 }
 
+function startPeriod(day, st) {
+  pv.periods.filter(x => !x.end && x.start < day).forEach(x => {   // 上一次忘了按結束 → 自動補上
+    const e1 = addDays(x.start, st.avgLen - 1), e2 = addDays(day, -1); x.end = e1 < e2 ? e1 : e2;
+  });
+  pv.periods.push({ start: day, end: null });
+  savePv(); renderMonth(); openDay(day, true); toast('已記錄經期開始');
+}
 function logIcons(l) {                        // 月曆日期下面的小圖示：有記錄哪些狀況
   const ic = [];
   if (l.mood != null) ic.push(MOOD[l.mood]);
@@ -581,7 +568,7 @@ function logIcons(l) {                        // 月曆日期下面的小圖示�
   if (l.note) ic.push('📝');
   return ic.length ? `<span class="licons">${ic.slice(0, 4).join('')}${ic.length > 4 ? '…' : ''}</span>` : '';
 }
-function openDay(day) {
+function openDay(day, edit = false) {
   const st = cycleStats(), today = ymd(new Date()), p = periodOn(day, st);
   const evs = db.events.filter(e => occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
   const d = parseYmd(day);
@@ -606,6 +593,28 @@ function openDay(day) {
       <label>性行為</label>${opt('sex', SEX, 'wrap')}
       <label>心情</label>${opt('mood', MOOD)}
       <label>備註</label><input id="p-note" value="${esc(log.note || '')}" placeholder="例如：想吃甜的、睡不好">`;
+  // 以前的日子：先只顯示那天有選的項目，按「修改紀錄」才出現全部選項
+  if (day < today && !edit) {
+    const rows = [];
+    if (log.flow != null) rows.push(['量', FLOW[log.flow]]);
+    if (log.pain != null) rows.push(['經痛', PAIN[log.pain]]);
+    if (log.sym && log.sym.length) rows.push(['症狀', log.sym.map(i => SYMPTOMS[i]).join('、')]);
+    if (log.dis != null) rows.push(['分泌物', DISCHARGE[log.dis]]);
+    if (log.poop != null) rows.push(['大便', POOP[log.poop]]);
+    if (log.sex != null) rows.push(['性行為', SEX[log.sex]]);
+    if (log.mood != null) rows.push(['心情', MOOD[log.mood]]);
+    if (log.note) rows.push(['備註', esc(log.note)]);
+    html += (p ? `<p class="period-tag">經期第 ${diffDays(p.start, day) + 1} 天</p>` : '')
+      + (rows.length ? `<div class="summary">${rows.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`
+        : '<p class="hint">這天沒有記錄身體狀況。</p>')
+      + `<div class="btns"><button class="primary" id="p-edit">${rows.length ? '修改紀錄' : '新增紀錄'}</button>
+        ${p ? '' : '<button id="p-start">經期這天開始</button>'}<button id="p-close">關閉</button></div>`;
+    openSheet(html);
+    $('#p-edit').onclick = () => openDay(day, true);
+    $('#p-close').onclick = () => { closeSheet(); renderMonth(); };
+    if ($('#p-start')) $('#p-start').onclick = () => startPeriod(day, st);
+    return;
+  }
   if (p) {
     html += `<p class="period-tag">經期第 ${diffDays(p.start, day) + 1} 天${p.end ? '' : '（還沒按結束）'}</p>
       <label>量</label>${opt('flow', FLOW)}
@@ -625,13 +634,7 @@ function openDay(day) {
   }
   openSheet(html);
   $('#p-close').onclick = () => { if ($('#p-note')) $('#p-note').onchange(); closeSheet(); renderMonth(); };
-  if ($('#p-start')) $('#p-start').onclick = () => {
-    pv.periods.filter(x => !x.end && x.start < day).forEach(x => {   // 上一次忘了按結束 → 自動補上
-      const e1 = addDays(x.start, st.avgLen - 1), e2 = addDays(day, -1); x.end = e1 < e2 ? e1 : e2;
-    });
-    pv.periods.push({ start: day, end: null });
-    savePv(); renderMonth(); openDay(day); toast('已記錄經期開始');
-  };
+  if ($('#p-start')) $('#p-start').onclick = () => startPeriod(day, st);
   if (day > today) return;
   $('#sheet').querySelectorAll('.opts button').forEach(b => b.onclick = () => {
     const log = pv.logs[day] = pv.logs[day] || {}, i = Number(b.dataset.i);
@@ -655,7 +658,7 @@ function openDay(day) {
     savePv();
   };
   if (!p) return;
-  if ($('#p-end')) $('#p-end').onclick = () => { p.end = day; savePv(); renderMonth(); openDay(day); toast('已記錄經期結束'); };
+  if ($('#p-end')) $('#p-end').onclick = () => { p.end = day; savePv(); renderMonth(); openDay(day, true); toast('已記錄經期結束'); };
   $('#p-del').onclick = () => {
     $('#p-del').outerHTML = '<button class="danger" id="p-del2">確定刪除（不能復原）</button>';
     $('#p-del2').onclick = () => {
