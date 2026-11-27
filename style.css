@@ -262,3 +262,29 @@ body.th-stock{--bg:#DCF2E7;--card:#F6FCF9;--line:#C5E6D5;--line2:#E1F3EA;--soft:
 #tabs button.on .tico{background:var(--soft);border-radius:12px;padding:0 14px}
 .mframe{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:10px 6px 6px;box-shadow:0 2px 0 var(--line)}
 .hr span.r{left:auto;right:4px;padding:0 0 0 4px}
+
+/* v0.14 記帳：帳戶、收入、統計 */
+#money-list[hidden],#money-stat[hidden],#money-acct[hidden],#x-catbox[hidden],#x-tobox[hidden],#x-payerbox[hidden]{display:none}
+.mtabs.mt3{grid-template-columns:repeat(3,1fr)}
+.st-kind,.st-by{margin:0 0 10px}
+.neg{color:#C0504D} .pos{color:#3E8E5E}
+.mgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mgrid2 span,.mbal span{display:block;font-size:13px;color:var(--muted)}
+.mgrid2 b{font-size:22px;font-weight:800}
+.mbal{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.mbal b{font-size:18px;font-weight:800}
+.donut{position:relative;display:flex;justify-content:center}
+.donut .dc{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.donut .dc span{display:block;font-size:13px;color:var(--muted)}
+.donut .dc b{font-size:17px;font-weight:800}
+.srank{display:grid;grid-template-columns:1fr auto;gap:2px 8px;background:var(--card);border-radius:14px;padding:10px 12px;margin-bottom:6px}
+.srank .bar{grid-column:1/3;margin-top:4px}
+.srank small{font-size:12px;color:var(--muted)} .srank small.r{text-align:right}
+.acc-sec{display:flex;justify-content:space-between}
+.arow{display:flex;align-items:center;width:100%;background:var(--card);border-radius:14px;padding:12px;margin-bottom:6px;text-align:left}
+.arow .xt{flex:1;display:flex;flex-direction:column;font-size:16px}
+.arow small{font-size:12px;color:var(--muted)}
+.arow b{font-size:17px;font-weight:800}
+.xrow small{background:var(--soft)}
+#x-payer button.on{border-color:var(--hi-bd)}
+optgroup{font-weight:700}
