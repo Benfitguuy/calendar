@@ -67,17 +67,13 @@
         </div>
       </div>
     </header>
+    <div class="mtabs"><button data-mode="events">行事曆</button><button data-mode="period">經期</button></div>
     <main class="mscroll">
       <div id="cycle-card"></div>
       <div class="mweek"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
       <div id="mgrid"></div>
-      <div class="legend">
-        <span><i class="lg period"></i>經期</span>
-        <span><i class="lg predict"></i>預測</span>
-        <span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span>
-        <span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>
-      </div>
-      <p class="tray-hint">點一下日期：看那天的行程、記錄經期。經期紀錄只存在這支手機，不會給別人看到。</p>
+      <div class="legend" id="legend"></div>
+      <p class="tray-hint" id="m-hint"></p>
     </main>
   </div>
 
