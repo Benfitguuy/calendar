@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.7.1';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -164,7 +164,7 @@ const segValue = () => $('#sheet .seg .on').dataset.owner;
 function openEvent(e, preset = {}) {
   const isNew = !e;
   const v = e || { title: '', owner: preset.owner || 'sarah', date: sel, start: preset.start || '09:00',
-    end: preset.end || '10:00', repeat: 'none' };
+    end: preset.end || '', repeat: 'none' };
   const rep = v.repeat !== 'none';
   openSheet(`
     <h3>${isNew ? '新增行程' : '編輯行程'}</h3>
@@ -173,9 +173,9 @@ function openEvent(e, preset = {}) {
     <label>${rep ? '從哪一天開始' : '日期'}</label><input id="f-date" type="date" value="${v.date}">
     <div class="row2">
       <div><label>開始</label><input id="f-start" type="time" step="300" value="${v.start}"></div>
-      <div id="f-endbox"${v.end ? '' : ' hidden'}><label>結束</label><input id="f-end" type="time" step="300" value="${v.end || toTime(toMin(v.start) + 60)}"></div>
+      <div><label>結束 <span class="opt-tag">可以不填</span><button type="button" id="f-endclear" class="mini-link"${v.end ? '' : ' hidden'}>清除</button></label>
+        <input id="f-end" type="time" step="300" value="${v.end || ''}"></div>
     </div>
-    <label class="check"><input id="f-noend" type="checkbox"${v.end ? '' : ' checked'}> 只記開始時間（不用結束時間）</label>
     <label>重複</label>
     <select id="f-repeat">${Object.entries(REPEAT).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
     ${!isNew && rep ? '<p class="hint">這是重複的行程，修改會套用到每一天。</p>' : ''}
@@ -188,10 +188,11 @@ function openEvent(e, preset = {}) {
   bindSeg();
   if (isNew) setTimeout(() => $('#f-title').focus(), 50);
   $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('input', () => $('#f-err').textContent = ''));
-  $('#f-noend').onchange = () => { $('#f-endbox').hidden = $('#f-noend').checked; $('#f-err').textContent = ''; };
+  $('#f-end').addEventListener('input', () => $('#f-endclear').hidden = !$('#f-end').value);
+  $('#f-endclear').onclick = () => { $('#f-end').value = ''; $('#f-endclear').hidden = true; $('#f-err').textContent = ''; };
   $('#f-cancel').onclick = closeSheet;
   $('#f-save').onclick = () => {
-    const noEnd = $('#f-noend').checked;
+    const noEnd = !$('#f-end').value;          // 沒填結束時間＝只記開始
     const title = $('#f-title').value.trim(), start = $('#f-start').value, end = noEnd ? '' : $('#f-end').value, date = $('#f-date').value;
     if (!title) return $('#f-err').textContent = '請先寫要做什麼';
     if (!date || !start || (!noEnd && !end)) return $('#f-err').textContent = '日期和時間都要填';
@@ -332,7 +333,7 @@ function bind() {
     const r = $('#events').getBoundingClientRect();
     const owner = e.clientX - r.left < r.width / 2 ? 'ben' : 'sarah';
     const s = Math.floor((e.clientY - r.top) / HOUR * 2) * 30;
-    openEvent(null, { owner, start: toTime(s), end: toTime(Math.min(1439, s + 60)) });
+    openEvent(null, { owner, start: toTime(s) });
   });
   $('#sheetwrap').addEventListener('click', e => { if (e.target.id === 'sheetwrap') closeSheet(); });
   const chips = $('#chips');
