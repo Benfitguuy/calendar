@@ -11,6 +11,9 @@
 <title>我們的行事曆</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Iansui&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -77,9 +80,48 @@
     </main>
   </div>
 
+  <!-- 頁面三：記帳 -->
+  <div id="page-money" class="page" hidden>
+    <header>
+      <div class="top">
+        <h1 id="money-title"></h1>
+        <div class="top-btns">
+          <button id="money-prev" class="arrow" aria-label="上個月">‹</button>
+          <button id="money-next" class="arrow" aria-label="下個月">›</button>
+          <button id="money-add" class="round" aria-label="記一筆">＋</button>
+        </div>
+      </div>
+    </header>
+    <main class="mscroll">
+      <div id="money-sum" class="card"></div>
+      <div id="money-list"></div>
+    </main>
+  </div>
+
+  <!-- 頁面四：庫存＋採買清單 -->
+  <div id="page-stock" class="page" hidden>
+    <header>
+      <div class="top">
+        <h1>家裡庫存</h1>
+        <div class="top-btns"><button id="stock-add" class="pill">＋ 新增</button></div>
+      </div>
+    </header>
+    <div class="mtabs stabs"><button data-tab="stock">庫存</button><button data-tab="shop">採買清單 <b id="shop-badge" class="badge"></b></button></div>
+    <main class="mscroll">
+      <div id="stock-view"><div id="stock-list"></div>
+        <p class="tray-hint">用掉了按「−」，買了按「＋」。剩下的數量到提醒線（小黑線）就會自動加進採買清單。</p></div>
+      <div id="shop-view" hidden>
+        <form id="shop-form" class="shopadd"><input id="shop-input" placeholder="要買什麼？例如：牛奶"><button class="pill">加入</button></form>
+        <div id="shop-list"></div>
+      </div>
+    </main>
+  </div>
+
   <nav id="tabs">
     <button data-page="day" class="on"><span class="tico">◷</span>今天</button>
     <button data-page="month"><span class="tico">▦</span>月曆</button>
+    <button data-page="money"><span class="tico">＄</span>記帳</button>
+    <button data-page="stock"><span class="tico">☰</span>庫存</button>
   </nav>
 </div>
 
