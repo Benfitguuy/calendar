@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="我們的行事曆">
+<meta name="theme-color" content="#F7F2E8">
+<title>我們的行事曆</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="top">
+      <h1 id="month"></h1>
+      <div class="top-btns">
+        <button id="today" class="pill">今天</button>
+        <button id="add" class="round" aria-label="新增行程">＋</button>
+      </div>
+    </div>
+    <div class="week">
+      <button id="prev" class="arrow" aria-label="上一週">‹</button>
+      <div id="days"></div>
+      <button id="next" class="arrow" aria-label="下一週">›</button>
+    </div>
+    <div class="colhead">
+      <span></span>
+      <span class="ch ben">Ben</span>
+      <span class="ch sarah">Sarah</span>
+    </div>
+  </header>
+
+  <main id="scroller">
+    <div id="grid">
+      <div id="hours"></div>
+      <div id="events"></div>
+    </div>
+  </main>
+
+  <section id="tray">
+    <div class="tray-head">
+      <span>待安排 <b id="tcount"></b></span>
+      <button id="addtodo" class="pill">＋ 新增</button>
+    </div>
+    <div id="chips"></div>
+    <p class="tray-hint">按住待辦，拖到上面的時間放開，就排好了</p>
+  </section>
+</div>
+
+<div id="sheetwrap" hidden><div id="sheet"></div></div>
+<div id="preview" hidden></div>
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
