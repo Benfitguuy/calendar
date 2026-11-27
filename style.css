@@ -232,3 +232,7 @@ input,select,button{font-family:inherit}
 .opts.wrap{flex-wrap:wrap}
 .opts.wrap button{flex:0 0 auto;padding:8px 12px}
 .mweek,#mgrid{grid-template-columns:repeat(7,minmax(0,1fr))} .mday{min-width:0;overflow:hidden}
+.lg{border-radius:50%}
+.opt-tag{font-size:11px;background:var(--soft);border-radius:6px;padding:1px 6px;margin-left:4px}
+.mini-link{float:right;font-size:13px;color:var(--both-bd);padding:0 2px}
+.mini-link[hidden]{display:none}
