@@ -212,3 +212,23 @@ input,select,button{font-family:inherit}
 .shrow .box{width:22px;height:22px;border-radius:7px;border:2px solid var(--muted);flex-shrink:0}
 .shrow.done{opacity:.5;text-decoration:line-through}
 .shrow.done .box{background:var(--text);border-color:var(--text)}
+
+/* v0.7 月曆：不要明顯格子 */
+#mgrid{gap:0;row-gap:6px}
+.mday,#mgrid.evmode .mday{background:transparent;border:0;border-radius:0;padding:4px 1px 0;height:auto;min-height:62px;justify-content:flex-start;gap:2px}
+#mgrid.evmode .mday{min-height:92px}
+.mday .num,#mgrid.evmode .num{width:30px;height:30px;line-height:30px;font-size:17px;border:0;flex-shrink:0}
+.mday.today .num{background:#E9C9D2;font-weight:700}
+.mday.period{background:transparent;color:inherit}
+.mday.period .num{background:#F59AB0;color:#5E1A2E}
+.mday.predict{border:0}
+.mday.predict .num{outline:2px dashed #EE7F9C;outline-offset:-2px}
+.mini{font-size:11px;line-height:15px;border-radius:3px;border-left:3px solid;padding:0 2px 0 3px}
+.mini.ben{border-color:var(--ben-bd)} .mini.sarah{border-color:var(--sarah-bd)} .mini.both{border-color:var(--both-bd)} .mini.work{border-color:var(--work-bd)}
+.logmark{top:2px;right:2px}
+.slide-l{animation:slideL .25s ease-out} .slide-r{animation:slideR .25s ease-out}
+@keyframes slideL{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes slideR{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
+.opts.wrap{flex-wrap:wrap}
+.opts.wrap button{flex:0 0 auto;padding:8px 12px}
+.mweek,#mgrid{grid-template-columns:repeat(7,minmax(0,1fr))} .mday{min-width:0;overflow:hidden}
