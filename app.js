@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.7.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -448,6 +448,9 @@ const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 const FLOW = ['少', '中', '多'];
 const PAIN = ['沒有', '輕微', '中等', '嚴重'];
 const MOOD = ['😄', '🙂', '😐', '😣', '😢'];
+const SYMPTOMS = ['肚子痛', '腰痠', '頭痛', '胸部脹痛', '長痘痘', '疲倦', '脹氣', '情緒起伏'];
+const DISCHARGE = ['乾乾的', '黏稠', '乳白色', '蛋白狀（拉絲）', '水水的', '顏色或味道怪怪的'];
+const SEX = ['沒有', '有（有避孕）', '有（沒避孕）'];
 
 function cycleStats() {
   const starts = pv.periods.map(p => p.start).sort();
@@ -508,8 +511,8 @@ function renderMonth() {
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
     : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>✎ 有記錄狀況</span>';
   $('#m-hint').textContent = evMode
-    ? '點一下日期看那天的行程。每天、平日重複的行程（例如起床）不會顯示在月曆上。'
-    : '點一下日期記錄經期。經期紀錄只存在這支手機，不會給別人看到。';
+    ? '左右滑可以換月份。點一下日期看那天的行程；每天、平日重複的行程（例如起床）不會顯示在月曆上。'
+    : '左右滑可以換月份。點一下日期記錄經期和身體狀況；這些紀錄只存在這支手機，不會給別人看到。';
   if (!evMode) renderCycleCard(st, preds);
   let h = '';
   for (let i = 0; i < cells; i++) {
@@ -550,14 +553,19 @@ function openDay(day) {
     $('#p-close').onclick = closeSheet;
     return;
   }
+  const log = pv.logs[day] || {};
+  const opt = (key, arr, cls = '') => `<div class="opts ${cls}">${arr.map((t, i) => `<button class="${log[key] === i ? 'on' : ''}" data-k="${key}" data-i="${i}">${t}</button>`).join('')}</div>`;
+  const multi = (key, arr) => `<div class="opts wrap">${arr.map((t, i) => `<button class="${(log[key] || []).includes(i) ? 'on' : ''}" data-m="${key}" data-i="${i}">${t}</button>`).join('')}</div>`;
+  const body = `<label>症狀（可以選很多個）</label>${multi('sym', SYMPTOMS)}
+      <label>分泌物</label>${opt('dis', DISCHARGE, 'wrap')}
+      <label>性行為</label>${opt('sex', SEX, 'wrap')}
+      <label>心情</label>${opt('mood', MOOD)}
+      <label>備註</label><input id="p-note" value="${esc(log.note || '')}" placeholder="例如：想吃甜的、睡不好">`;
   if (p) {
-    const log = pv.logs[day] || {};
-    const opt = (key, arr) => `<div class="opts">${arr.map((t, i) => `<button class="${log[key] === i ? 'on' : ''}" data-k="${key}" data-i="${i}">${t}</button>`).join('')}</div>`;
     html += `<p class="period-tag">經期第 ${diffDays(p.start, day) + 1} 天${p.end ? '' : '（還沒按結束）'}</p>
       <label>量</label>${opt('flow', FLOW)}
       <label>經痛</label>${opt('pain', PAIN)}
-      <label>心情</label>${opt('mood', MOOD)}
-      <label>備註</label><input id="p-note" value="${esc(log.note || '')}" placeholder="例如：腰痠、想吃甜的">
+      ${body}
       <div class="btns">
         ${p.end === day ? '' : '<button id="p-end">經期在這天結束</button>'}
         <button class="danger" id="p-del">刪除這次經期紀錄</button>
@@ -566,7 +574,9 @@ function openDay(day) {
   } else if (day > today) {
     html += `<p class="hint">還沒到的日子不能記錄經期。</p><div class="btns"><button id="p-close">關閉</button></div>`;
   } else {
-    html += `<div class="btns"><button class="primary" id="p-start">經期這天開始</button><button id="p-close">關閉</button></div>`;
+    html += `<div class="btns"><button class="primary" id="p-start">經期這天開始</button></div>
+      <p class="hint">不是經期的日子，也可以記錄身體狀況：</p>${body}
+      <div class="btns"><button id="p-close">完成</button></div>`;
   }
   openSheet(html);
   $('#p-close').onclick = () => { if ($('#p-note')) $('#p-note').onchange(); closeSheet(); renderMonth(); };
@@ -577,13 +587,21 @@ function openDay(day) {
     pv.periods.push({ start: day, end: null });
     savePv(); renderMonth(); openDay(day); toast('已記錄經期開始');
   };
-  if (!p) return;
+  if (day > today) return;
   $('#sheet').querySelectorAll('.opts button').forEach(b => b.onclick = () => {
-    const log = pv.logs[day] = pv.logs[day] || {}, k = b.dataset.k, i = Number(b.dataset.i);
-    if (log[k] === i) delete log[k]; else log[k] = i;
+    const log = pv.logs[day] = pv.logs[day] || {}, i = Number(b.dataset.i);
+    if (b.dataset.m) {                                   // 可以複選（症狀）
+      const k = b.dataset.m, arr = log[k] = log[k] || [];
+      const at = arr.indexOf(i); if (at >= 0) arr.splice(at, 1); else arr.push(i);
+      if (!arr.length) delete log[k];
+      b.classList.toggle('on', at < 0);
+    } else {                                             // 單選（再按一次取消）
+      const k = b.dataset.k;
+      if (log[k] === i) delete log[k]; else log[k] = i;
+      b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b && log[k] === i));
+    }
     if (!Object.keys(log).length) delete pv.logs[day];
     savePv();
-    b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b && log[k] === i));
   });
   $('#p-note').onchange = () => {
     const v = $('#p-note').value.trim(), log = pv.logs[day] = pv.logs[day] || {};
@@ -591,12 +609,14 @@ function openDay(day) {
     if (!Object.keys(log).length) delete pv.logs[day];
     savePv();
   };
+  if (!p) return;
   if ($('#p-end')) $('#p-end').onclick = () => { p.end = day; savePv(); renderMonth(); openDay(day); toast('已記錄經期結束'); };
   $('#p-del').onclick = () => {
     $('#p-del').outerHTML = '<button class="danger" id="p-del2">確定刪除（不能復原）</button>';
     $('#p-del2').onclick = () => {
       const end = periodEnd(p, st);
-      Object.keys(pv.logs).forEach(k => { if (k >= p.start && k <= end) delete pv.logs[k]; });
+      Object.keys(pv.logs).forEach(k => { if (k >= p.start && k <= end) {      // 只刪經期的量和經痛，其他症狀留著
+        delete pv.logs[k].flow; delete pv.logs[k].pain; if (!Object.keys(pv.logs[k]).length) delete pv.logs[k]; } });
       pv.periods = pv.periods.filter(x => x !== p); savePv(); closeSheet(); renderMonth(); toast('已刪除');
     };
   };
@@ -612,11 +632,22 @@ function showPage(name) {
   else render();
 }
 function goDay(day) { sel = day; closeSheet(); showPage('day'); scrollToNow(); }
+function slideMonth(n) {
+  const g = $('#mgrid'); g.classList.remove('slide-l', 'slide-r'); void g.offsetWidth;
+  shiftMonth(n); g.classList.add(n > 0 ? 'slide-l' : 'slide-r');
+}
 const shiftMonth = n => { const [y, m] = mCur.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); mCur = ymd(d).slice(0, 7); renderMonth(); };
 function bindMonth() {
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showPage(b.dataset.page));
-  $('#m-prev').onclick = () => shiftMonth(-1);
-  $('#m-next').onclick = () => shiftMonth(1);
+  // 左右滑換月
+  let sx = null, sy = 0;
+  const ms = $('#page-month .mscroll');
+  ms.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  ms.addEventListener('touchend', e => {
+    if (sx == null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) slideMonth(dx < 0 ? 1 : -1);
+  });
   $('#m-today').onclick = () => { mCur = ymd(new Date()).slice(0, 7); renderMonth(); };
   $('#mgrid').addEventListener('click', e => { const b = e.target.closest('.mday'); if (b) openDay(b.dataset.day); });
   document.querySelectorAll('.mtabs button').forEach(b => b.onclick = () => {
