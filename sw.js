@@ -1,5 +1,5 @@
 // 離線快取：有網路時拿最新版，沒網路時用存起來的。改程式時把 VERSION 加一號。
-const VERSION = 'cal-0.15.0';
+const VERSION = 'cal-0.16.0';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest',
   './icons/icon-192-v4.png', './icons/icon-512-v4.png', './icons/apple-touch-icon-v4.png', './icons/boy.svg', './icons/girl.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
