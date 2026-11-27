@@ -1,6 +1,6 @@
 :root{
   --bg:#FBE3EA; --card:#FFF6F8; --line:#F0D2DA; --line2:#F8E6EB;
-  --text:#4A3A3F; --muted:#A58D94; --soft:#F5CFDA;
+  --text:#4A3A3F; --muted:#A58D94; --soft:#F5CFDA; --hi:#FCE0E7; --hi-bd:#EE7F9C;
   --ben-bg:#EEEDFE; --ben-fg:#3C3489; --ben-bd:#7F77DD;
   --sarah-bg:#EAF3DE; --sarah-fg:#27500A; --sarah-bd:#639922;
   --both-bg:#FCEBEB; --both-fg:#791F1F; --both-bd:#E24B4A;
@@ -144,7 +144,7 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 .period-tag{display:inline-block;background:#F59AB0;color:#5E1A2E;border-radius:999px;padding:4px 12px;font-size:14px;margin:0}
 .opts{display:flex;gap:6px}
 .opts button{flex:1;padding:9px 0;border-radius:12px;background:var(--soft);border:2px solid transparent;font-size:15px}
-.opts button.on{background:#FCE0E7;border-color:#EE7F9C;color:#5E1A2E;font-weight:600}
+.opts button.on{background:var(--hi);border-color:var(--hi-bd);color:#5E1A2E;font-weight:600}
 
 .ev .st{font-weight:500;opacity:.75;font-size:12px}
 label.check{display:flex !important;align-items:center;gap:8px;color:var(--text) !important;font-size:15px !important}
@@ -171,7 +171,7 @@ input,select,button{font-family:inherit}
 .sum-p .av{width:22px;height:22px;margin:0}
 .sum-p .ben{background:var(--ben-bg);color:var(--ben-fg)} .sum-p .sarah{background:var(--sarah-bg);color:var(--sarah-fg)} .sum-p .both{background:var(--both-bg);color:var(--both-fg)}
 .cbar{display:grid;grid-template-columns:78px 1fr 70px;align-items:center;gap:6px;font-size:14px;margin-top:6px}
-.cbar i{display:block;height:10px;border-radius:5px;background:#EE7F9C}
+.cbar i{display:block;height:10px;border-radius:5px;background:var(--hi-bd)}
 .cbar b{text-align:right;font-weight:500}
 .mday-h{font-size:13px;color:var(--muted);margin:12px 4px 4px}
 .xrow{display:flex;align-items:center;gap:10px;width:100%;background:var(--card);border-radius:14px;padding:10px 12px;margin-bottom:6px;text-align:left}
@@ -184,7 +184,7 @@ input,select,button{font-family:inherit}
 .catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .catgrid button,.icongrid button{background:var(--soft);border-radius:12px;padding:8px 0;font-size:22px;border:2px solid transparent;display:flex;flex-direction:column;align-items:center}
 .catgrid button span{font-size:13px}
-.catgrid button.on,.icongrid button.on{background:#FCE0E7;border-color:#EE7F9C}
+.catgrid button.on,.icongrid button.on{background:var(--hi);border-color:var(--hi-bd)}
 .icongrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
 .seg.seg3{grid-template-columns:repeat(3,1fr)}
 .badge{display:inline-block;min-width:20px;height:20px;line-height:20px;border-radius:10px;background:var(--both-bd);color:#fff;font-size:12px;padding:0 5px;font-weight:600}
@@ -250,3 +250,14 @@ h1,h3,.ev b,.sum-top b,.xrow b{font-weight:800}
 .summary div{display:flex;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:16px}
 .summary div:last-child{border-bottom:0}
 .summary span{color:var(--muted);min-width:56px;font-weight:600}
+#toast{bottom:auto;top:calc(env(safe-area-inset-top) + 14px)}
+
+/* v0.12 每個分頁不同的馬卡龍色（body 的 class 由 showPage 切換） */
+body,#app{background:var(--bg);transition:background .25s}
+body.th-day{--bg:#E2EEFA;--card:#F8FBFF;--line:#CFE0F2;--line2:#E6F0FA;--soft:#D3E5F7;--muted:#8496AA;--hi:#E3EEFB;--hi-bd:#7FAEE0}
+body.th-month{--bg:#FBE3EA;--card:#FFF6F8;--line:#F0D2DA;--line2:#F8E6EB;--soft:#F5CFDA;--muted:#A58D94;--hi:#FCE0E7;--hi-bd:#EE7F9C}
+body.th-money{--bg:#FFF1D2;--card:#FFFBF1;--line:#F2DFB4;--line2:#FAEED2;--soft:#FBE5B4;--muted:#A8956E;--hi:#FFF0C9;--hi-bd:#E8B44C}
+body.th-stock{--bg:#DCF2E7;--card:#F6FCF9;--line:#C5E6D5;--line2:#E1F3EA;--soft:#C7EBD9;--muted:#7FA391;--hi:#D7F2E4;--hi-bd:#5DBB8E}
+#tabs button.on{color:var(--text)}
+#tabs button.on .tico{background:var(--soft);border-radius:12px;padding:0 14px}
+.mframe{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:10px 6px 6px;box-shadow:0 2px 0 var(--line)}
