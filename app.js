@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.6.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -45,6 +45,15 @@ function seed() {
 }
 let db = Store.load();
 if (!db) { db = seed(); Store.save(db); }
+// v0.6 新增：記帳、庫存、採買清單（舊資料補上欄位）
+if (!db.expenses) db.expenses = [];
+if (!db.shop) db.shop = [];
+if (!db.stock) db.stock = [
+  { id: uid(), name: '洗髮精', icon: '🧴', qty: 1, unit: '瓶', low: 1 },
+  { id: uid(), name: '衛生紙', icon: '🧻', qty: 6, unit: '捲', low: 4 },
+  { id: uid(), name: '雞蛋', icon: '🥚', qty: 10, unit: '顆', low: 4 }
+];
+Store.save(db);
 const save = () => Store.save(db);
 let sel = ymd(new Date());
 
@@ -595,10 +604,12 @@ function openDay(day) {
 
 // ---------- 切換頁面 ----------
 function showPage(name) {
-  $('#page-day').hidden = name !== 'day';
-  $('#page-month').hidden = name !== 'month';
+  ['day', 'month', 'money', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
-  if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); } else { render(); }
+  if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
+  else if (name === 'money') renderMoney();
+  else if (name === 'stock') renderStock();
+  else render();
 }
 function goDay(day) { sel = day; closeSheet(); showPage('day'); scrollToNow(); }
 const shiftMonth = n => { const [y, m] = mCur.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); mCur = ymd(d).slice(0, 7); renderMonth(); };
@@ -614,5 +625,180 @@ function bindMonth() {
   });
 }
 
-buildHours(); bind(); bindMove(); bindMonth(); render(); scrollToNow();
+// ====================================================================
+// 記帳（兩人共用；之後接同步時跟行程一起上傳）
+// ====================================================================
+const CATS = [['food', '🍜', '餐飲'], ['grocery', '🛒', '買菜'], ['transport', '🚗', '交通'], ['home', '🏠', '居家'],
+  ['shopping', '🛍️', '購物'], ['fun', '🎉', '娛樂'], ['health', '💊', '醫療'], ['bills', '🧾', '帳單'], ['other', '📦', '其他']];
+const CAT = Object.fromEntries(CATS.map(([k, i, n]) => [k, { icon: i, name: n }]));
+const PAYER = { ben: 'Ben 付', sarah: 'Sarah 付', both: '一起付' };
+const money = n => '$' + (Math.round(n * 100) / 100).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+let moneyMonth = ymd(new Date()).slice(0, 7);
+
+function renderMoney() {
+  const [y, m] = moneyMonth.split('-').map(Number);
+  $('#money-title').textContent = `${y}年${m}月`;
+  const list = db.expenses.filter(x => x.date.slice(0, 7) === moneyMonth)
+    .sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (b.t || 0) - (a.t || 0));
+  const total = list.reduce((s, x) => s + x.amount, 0);
+  const byP = { ben: 0, sarah: 0, both: 0 }; list.forEach(x => byP[x.payer] += x.amount);
+  const byC = {}; list.forEach(x => byC[x.cat] = (byC[x.cat] || 0) + x.amount);
+  const cats = Object.entries(byC).sort((a, b) => b[1] - a[1]);
+  const max = cats.length ? cats[0][1] : 1;
+  $('#money-sum').innerHTML = `
+    <div class="sum-top"><span>這個月總共花了</span><b>${money(total)}</b></div>
+    <div class="sum-p">
+      <span class="ben"><img class="av" src="icons/boy.svg" alt="">${money(byP.ben)}</span>
+      <span class="sarah"><img class="av" src="icons/girl.svg" alt="">${money(byP.sarah)}</span>
+      <span class="both">♥ 一起 ${money(byP.both)}</span>
+    </div>
+    ${cats.map(([k, v]) => `<div class="cbar"><span>${CAT[k].icon} ${CAT[k].name}</span>
+      <i style="width:${Math.max(4, v / max * 100)}%"></i><b>${money(v)}</b></div>`).join('')}`;
+  let h = '', last = '';
+  for (const x of list) {
+    if (x.date !== last) { last = x.date; const d = parseYmd(x.date); h += `<div class="mday-h">${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）</div>`; }
+    h += `<button class="xrow" data-id="${x.id}"><span class="ci">${CAT[x.cat].icon}</span>
+      <span class="xt">${esc(x.note || CAT[x.cat].name)}<small class="${x.payer}">${PAYER[x.payer]}</small></span><b>${money(x.amount)}</b></button>`;
+  }
+  $('#money-list').innerHTML = h || '<p class="empty">這個月還沒有記帳，按右上角「＋」記第一筆吧</p>';
+}
+
+function openExpense(x) {
+  const isNew = !x;
+  const v = x || { amount: '', cat: 'food', payer: 'sarah', date: ymd(new Date()), note: '' };
+  openSheet(`
+    <h3>${isNew ? '記一筆' : '修改這筆'}</h3>
+    <label>多少錢？</label><input id="x-amt" type="number" inputmode="decimal" step="0.01" min="0" value="${v.amount}" placeholder="0" class="big">
+    <label>類別</label>
+    <div class="catgrid">${CATS.map(([k, i, n]) => `<button type="button" data-cat="${k}" class="${k === v.cat ? 'on' : ''}">${i}<span>${n}</span></button>`).join('')}</div>
+    <label>誰付的？</label>
+    <div class="seg seg3">${['ben', 'sarah', 'both'].map(o => `<button type="button" class="${o}${o === v.payer ? ' on' : ''}" data-owner="${o}">${NAMES[o]}</button>`).join('')}</div>
+    <label>日期</label><input id="x-date" type="date" value="${v.date}">
+    <label>備註（可以不填）</label><input id="x-note" value="${esc(v.note || '')}" placeholder="例如：超市、和朋友吃飯">
+    <p class="err" id="x-err"></p>
+    <div class="btns"><button class="primary" id="x-save">儲存</button>
+      ${isNew ? '' : '<button class="danger" id="x-del">刪除</button>'}<button id="x-cancel">取消</button></div>`);
+  bindSeg();
+  if (isNew) setTimeout(() => $('#x-amt').focus(), 50);
+  $('#sheet .catgrid').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+    $('#sheet .catgrid').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b)); };
+  $('#x-amt').oninput = () => $('#x-err').textContent = '';
+  $('#x-cancel').onclick = closeSheet;
+  $('#x-save').onclick = () => {
+    const amount = Math.round(parseFloat($('#x-amt').value) * 100) / 100;
+    if (!(amount > 0)) return $('#x-err').textContent = '請輸入金額';
+    if (!$('#x-date').value) return $('#x-err').textContent = '請選日期';
+    const data = { amount, cat: $('#sheet .catgrid .on').dataset.cat, payer: segValue(), date: $('#x-date').value, note: $('#x-note').value.trim() };
+    if (isNew) db.expenses.push({ id: uid(), t: Date.now(), ...data }); else Object.assign(x, data);
+    save(); closeSheet(); moneyMonth = data.date.slice(0, 7); renderMoney(); toast('記好了');
+  };
+  if (!isNew) $('#x-del').onclick = () => {
+    $('#x-del').outerHTML = '<button class="danger" id="x-del2">確定刪除</button>';
+    $('#x-del2').onclick = () => { db.expenses = db.expenses.filter(z => z !== x); save(); closeSheet(); renderMoney(); toast('已刪除'); };
+  };
+}
+
+// ====================================================================
+// 庫存＋採買清單（兩人共用）
+// ====================================================================
+const ICONS = ['🧴', '🧻', '🧼', '🪥', '🧽', '🧺', '🥚', '🥛', '🍞', '🧀', '🍚', '🍜', '☕', '🧂', '🍳', '🥫', '🍎', '🐱', '💊', '📦'];
+let stockTab = 'stock';
+const isLow = s => s.qty <= s.low;
+const fmtQty = n => Math.round(n * 100) / 100;
+
+function renderStock() {
+  const lows = db.stock.filter(isLow), oks = db.stock.filter(s => !isLow(s)).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  const shopCount = lows.length + db.shop.filter(x => !x.done).length;
+  document.querySelectorAll('.stabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === stockTab));
+  $('#shop-badge').textContent = shopCount || '';
+  $('#shop-badge').hidden = !shopCount;
+  $('#stock-view').hidden = stockTab !== 'stock';
+  $('#shop-view').hidden = stockTab !== 'shop';
+  const row = s => {
+    const pct = Math.min(100, s.qty / Math.max(s.low * 3, s.qty, 1) * 100), mark = Math.min(100, s.low / Math.max(s.low * 3, s.qty, 1) * 100);
+    return `<div class="srow${isLow(s) ? ' low' : ''}" data-id="${s.id}">
+      <span class="si">${s.icon}</span>
+      <div class="sm"><b data-edit="1">${esc(s.name)}</b><div class="bar"><i style="width:${pct}%"></i><em style="left:${mark}%"></em></div></div>
+      <span class="sq">${fmtQty(s.qty)}<small>${esc(s.unit)}</small></span>
+      <span class="spm"><button data-d="-1" aria-label="少一個">−</button><button data-d="1" aria-label="多一個">＋</button></span>
+    </div>`;
+  };
+  $('#stock-list').innerHTML =
+    (lows.length ? `<div class="sec low">需要補貨（${lows.length}）</div>${lows.map(row).join('')}` : '') +
+    `<div class="sec">其他用品（${oks.length}）</div>${oks.map(row).join('') || '<p class="empty">還沒有用品，按「＋ 新增」加一個</p>'}`;
+  const manual = db.shop;
+  $('#shop-list').innerHTML =
+    (lows.length ? `<div class="sec low">庫存偏低（自動加入）</div>` + lows.map(s => `<button class="shrow" data-stock="${s.id}">
+      <span class="box"></span><span>${s.icon} ${esc(s.name)}</span><small>剩 ${fmtQty(s.qty)} ${esc(s.unit)}</small></button>`).join('') : '') +
+    `<div class="sec">自己加的</div>` +
+    (manual.length ? manual.map(x => `<button class="shrow${x.done ? ' done' : ''}" data-shop="${x.id}"><span class="box"></span><span>${esc(x.name)}</span></button>`).join('')
+      : '<p class="empty">在上面輸入要買的東西</p>') +
+    (manual.some(x => x.done) ? '<div class="btns"><button id="shop-clear">清掉已買的</button></div>' : '');
+  if ($('#shop-clear')) $('#shop-clear').onclick = () => { db.shop = db.shop.filter(x => !x.done); save(); renderStock(); };
+}
+
+function openStock(s) {
+  const isNew = !s;
+  const v = s || { name: '', icon: '📦', qty: 1, unit: '個', low: 1 };
+  openSheet(`
+    <h3>${isNew ? '新增用品' : '修改用品'}</h3>
+    <label>名稱</label><input id="s-name" value="${esc(v.name)}" placeholder="例如：沐浴乳">
+    <label>圖示</label><div class="icongrid">${ICONS.map(i => `<button type="button" class="${i === v.icon ? 'on' : ''}">${i}</button>`).join('')}</div>
+    <div class="row2"><div><label>現在有幾個</label><input id="s-qty" type="number" inputmode="decimal" min="0" step="any" value="${v.qty}"></div>
+      <div><label>單位</label><input id="s-unit" value="${esc(v.unit)}" placeholder="瓶、包、顆"></div></div>
+    <label>剩幾個以下要提醒補貨？</label><input id="s-low" type="number" inputmode="decimal" min="0" step="any" value="${v.low}">
+    <p class="err" id="s-err"></p>
+    <div class="btns"><button class="primary" id="s-save">儲存</button>
+      ${isNew ? '' : '<button class="danger" id="s-del">刪除</button>'}<button id="s-cancel">取消</button></div>`);
+  if (isNew) setTimeout(() => $('#s-name').focus(), 50);
+  $('#sheet .icongrid').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+    $('#sheet .icongrid').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b)); };
+  $('#s-cancel').onclick = closeSheet;
+  $('#s-save').onclick = () => {
+    const name = $('#s-name').value.trim(), qty = parseFloat($('#s-qty').value), low = parseFloat($('#s-low').value);
+    if (!name) return $('#s-err').textContent = '請寫名稱';
+    if (!(qty >= 0) || !(low >= 0)) return $('#s-err').textContent = '數量請填數字';
+    const data = { name, icon: $('#sheet .icongrid .on').textContent, qty, unit: $('#s-unit').value.trim() || '個', low };
+    if (isNew) db.stock.push({ id: uid(), ...data }); else Object.assign(s, data);
+    save(); closeSheet(); renderStock(); toast('已儲存');
+  };
+  if (!isNew) $('#s-del').onclick = () => { db.stock = db.stock.filter(z => z !== s); save(); closeSheet(); renderStock(); toast('已刪除'); };
+}
+
+function buyStock(s) {   // 採買清單勾選庫存品 → 問買了幾個，加回庫存
+  const suggest = Math.max(1, Math.ceil(s.low * 2 - s.qty));
+  openSheet(`<h3>${s.icon} ${esc(s.name)} 買了幾${esc(s.unit)}？</h3>
+    <input id="b-n" type="number" inputmode="decimal" min="0" step="any" value="${suggest}" class="big">
+    <p class="hint">會加到庫存裡（現在剩 ${fmtQty(s.qty)} ${esc(s.unit)}）</p>
+    <div class="btns"><button class="primary" id="b-ok">買好了</button><button id="b-no">取消</button></div>`);
+  $('#b-no').onclick = closeSheet;
+  $('#b-ok').onclick = () => { const n = parseFloat($('#b-n').value) || 0; s.qty = fmtQty(s.qty + n); save(); closeSheet(); renderStock(); toast('已補貨'); };
+}
+
+function bindMoneyStock() {
+  $('#money-prev').onclick = () => { const [y, m] = moneyMonth.split('-').map(Number); moneyMonth = ymd(new Date(y, m - 2, 1)).slice(0, 7); renderMoney(); };
+  $('#money-next').onclick = () => { const [y, m] = moneyMonth.split('-').map(Number); moneyMonth = ymd(new Date(y, m, 1)).slice(0, 7); renderMoney(); };
+  $('#money-add').onclick = () => openExpense(null);
+  $('#money-list').onclick = e => { const b = e.target.closest('.xrow'); if (b) openExpense(db.expenses.find(x => x.id === b.dataset.id)); };
+  document.querySelectorAll('.stabs button').forEach(b => b.onclick = () => { stockTab = b.dataset.tab; renderStock(); });
+  $('#stock-add').onclick = () => openStock(null);
+  $('#stock-list').onclick = e => {
+    const r = e.target.closest('.srow'); if (!r) return;
+    const s = db.stock.find(x => x.id === r.dataset.id); if (!s) return;
+    const pm = e.target.closest('[data-d]');
+    if (pm) { s.qty = Math.max(0, fmtQty(s.qty + Number(pm.dataset.d))); save(); renderStock(); return; }
+    openStock(s);
+  };
+  $('#shop-form').onsubmit = e => {
+    e.preventDefault(); const v = $('#shop-input').value.trim(); if (!v) return;
+    db.shop.push({ id: uid(), name: v, done: false }); $('#shop-input').value = ''; save(); renderStock();
+  };
+  $('#shop-list').addEventListener('click', e => {
+    const b = e.target.closest('.shrow'); if (!b) return;
+    if (b.dataset.stock) { const s = db.stock.find(x => x.id === b.dataset.stock); if (s) buyStock(s); return; }
+    const x = db.shop.find(z => z.id === b.dataset.shop); if (x) { x.done = !x.done; save(); renderStock(); }
+  });
+}
+
+buildHours(); bind(); bindMove(); bindMonth(); bindMoneyStock(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
