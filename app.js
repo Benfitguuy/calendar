@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.13.0';
+const APP_VERSION = '0.14.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -712,74 +712,216 @@ function bindMonth() {
 
 // ====================================================================
 // 記帳（兩人共用；之後接同步時跟行程一起上傳）
+//  db.accounts：帳戶（信用卡／銀行／現金），餘額＝起始金額＋所有交易加減
+//  db.expenses：每一筆交易 { type: expense|income|transfer, amount, cat, acct, toAcct, payer, date, note }
+//               （舊資料沒有 type ＝ 支出、沒有 acct ＝ 不指定帳戶）
 // ====================================================================
 const CATS = [['food', '🍜', '餐飲'], ['grocery', '🛒', '買菜'], ['transport', '🚗', '交通'], ['home', '🏠', '居家'],
   ['shopping', '🛍️', '購物'], ['fun', '🎉', '娛樂'], ['health', '💊', '醫療'], ['bills', '🧾', '帳單'], ['other', '📦', '其他']];
-const CAT = Object.fromEntries(CATS.map(([k, i, n]) => [k, { icon: i, name: n }]));
+const INCATS = [['salary', '💼', '薪水'], ['bonus', '🎁', '獎金'], ['refund', '↩️', '退款'], ['interest', '🏦', '利息'],
+  ['side', '💡', '副業'], ['other_in', '💰', '其他收入']];
+const CAT = Object.fromEntries([...CATS, ...INCATS].map(([k, i, n]) => [k, { icon: i, name: n }]));
+CAT.transfer = { icon: '⇄', name: '轉帳' };
 const PAYER = { ben: 'Ben 付', sarah: 'Sarah 付', both: '一起付' };
-const money = n => '$' + (Math.round(n * 100) / 100).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const ACCT_TYPES = [['credit', '💳', '信用卡'], ['bank', '🏦', '銀行'], ['cash', '💵', '現金']];
+const ACCT_T = Object.fromEntries(ACCT_TYPES.map(([k, i, n]) => [k, { icon: i, name: n }]));
+const CHART_COLORS = ['#7FAEE0', '#EE8E6B', '#9B86D9', '#E8B44C', '#5DBB8E', '#EE7F9C', '#6C8EAD', '#C9A227', '#A3A3A3', '#B5838D'];
+if (!db.accounts) { db.accounts = []; save(); }
+const money = n => (n < 0 ? '-' : '') + 'A$' + Math.abs(Math.round(n * 100) / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const txType = x => x.type || 'expense';
 let moneyMonth = ymd(new Date()).slice(0, 7);
+let moneyTab = 'list', statKind = 'expense', statBy = 'cat';
+
+function acctBalance(a) {                      // 帳戶餘額：起始金額＋收入－支出±轉帳
+  let b = a.init || 0;
+  for (const x of db.expenses) {
+    const t = txType(x);
+    if (t === 'income' && x.acct === a.id) b += x.amount;
+    else if (t === 'expense' && x.acct === a.id) b -= x.amount;
+    else if (t === 'transfer') { if (x.acct === a.id) b -= x.amount; if (x.toAcct === a.id) b += x.amount; }
+  }
+  return Math.round(b * 100) / 100;
+}
+const acctName = id => { const a = db.accounts.find(z => z.id === id); return a ? a.name : ''; };
 
 function renderMoney() {
   const [y, m] = moneyMonth.split('-').map(Number);
   $('#money-title').textContent = `${y}年${m}月`;
+  document.querySelectorAll('.mntabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === moneyTab));
+  ['list', 'stat', 'acct'].forEach(t => $('#money-' + t).hidden = t !== moneyTab);
+  $('#money-monthnav').style.visibility = moneyTab === 'acct' ? 'hidden' : 'visible';
   const list = db.expenses.filter(x => x.date.slice(0, 7) === moneyMonth)
     .sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (b.t || 0) - (a.t || 0));
-  const total = list.reduce((s, x) => s + x.amount, 0);
-  const byP = { ben: 0, sarah: 0, both: 0 }; list.forEach(x => byP[x.payer] += x.amount);
-  const byC = {}; list.forEach(x => byC[x.cat] = (byC[x.cat] || 0) + x.amount);
-  const cats = Object.entries(byC).sort((a, b) => b[1] - a[1]);
-  const max = cats.length ? cats[0][1] : 1;
-  $('#money-sum').innerHTML = `
-    <div class="sum-top"><span>這個月總共花了</span><b>${money(total)}</b></div>
-    <div class="sum-p">
-      <span class="ben"><img class="av" src="icons/boy.svg" alt="">${money(byP.ben)}</span>
-      <span class="sarah"><img class="av" src="icons/girl.svg" alt="">${money(byP.sarah)}</span>
-      <span class="both">♥ 一起 ${money(byP.both)}</span>
-    </div>
-    ${cats.map(([k, v]) => `<div class="cbar"><span>${CAT[k].icon} ${CAT[k].name}</span>
-      <i style="width:${Math.max(4, v / max * 100)}%"></i><b>${money(v)}</b></div>`).join('')}`;
-  let h = '', last = '';
-  for (const x of list) {
-    if (x.date !== last) { last = x.date; const d = parseYmd(x.date); h += `<div class="mday-h">${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）</div>`; }
-    h += `<button class="xrow" data-id="${x.id}"><span class="ci">${CAT[x.cat].icon}</span>
-      <span class="xt">${esc(x.note || CAT[x.cat].name)}<small class="${x.payer}">${PAYER[x.payer]}</small></span><b>${money(x.amount)}</b></button>`;
+  const out = list.filter(x => txType(x) === 'expense').reduce((s, x) => s + x.amount, 0);
+  const inc = list.filter(x => txType(x) === 'income').reduce((s, x) => s + x.amount, 0);
+  const sum = `<div class="mgrid2"><div><span>支出</span><b class="neg">${money(out)}</b></div><div><span>收入</span><b class="pos">${money(inc)}</b></div></div>
+    <div class="mbal"><span>結餘</span><b class="${inc - out >= 0 ? 'pos' : 'neg'}">${inc - out >= 0 ? '+' : ''}${money(inc - out)}</b></div>`;
+  if (moneyTab === 'list') {
+    let h = '', last = '';
+    for (const x of list) {
+      if (x.date !== last) { last = x.date; const d = parseYmd(x.date); h += `<div class="mday-h">${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）</div>`; }
+      const t = txType(x), c = t === 'transfer' ? CAT.transfer : (CAT[x.cat] || CAT.other);
+      const sub = t === 'transfer' ? `${esc(acctName(x.acct) || '?')} → ${esc(acctName(x.toAcct) || '?')}`
+        : [acctName(x.acct), x.payer && t === 'expense' ? PAYER[x.payer] : ''].filter(Boolean).map(esc).join('・');
+      h += `<button class="xrow" data-id="${x.id}"><span class="ci">${c.icon}</span>
+        <span class="xt">${esc(x.note || c.name)}${sub ? `<small>${sub}</small>` : ''}</span>
+        <b class="${t === 'income' ? 'pos' : t === 'expense' ? 'neg' : ''}">${t === 'income' ? '+' : t === 'expense' ? '-' : ''}${money(x.amount).replace('-', '')}</b></button>`;
+    }
+    $('#money-list').innerHTML = `<div class="card">${sum}</div>` + (h || '<p class="empty">這個月還沒有記帳，按右上角「＋」記第一筆吧</p>');
+  } else if (moneyTab === 'stat') {
+    document.querySelectorAll('.st-kind button').forEach(b => b.classList.toggle('on', b.dataset.k === statKind));
+    document.querySelectorAll('.st-by button').forEach(b => b.classList.toggle('on', b.dataset.b === statBy));
+    const rows = list.filter(x => txType(x) === statKind);
+    const total = rows.reduce((s, x) => s + x.amount, 0);
+    const groups = {};
+    rows.forEach(x => {
+      const k = statBy === 'cat' ? (x.cat || 'other') : (x.acct || '_none');
+      (groups[k] = groups[k] || { sum: 0, n: 0 }); groups[k].sum += x.amount; groups[k].n++;
+    });
+    const arr = Object.entries(groups).sort((a, b) => b[1].sum - a[1].sum);
+    // 甜甜圈圖
+    let off = 0, ring = '';
+    const C = 2 * Math.PI * 70;
+    arr.forEach(([k, g], i) => {
+      const len = total ? g.sum / total * C : 0;
+      ring += `<circle r="70" cx="90" cy="90" fill="none" stroke="${CHART_COLORS[i % CHART_COLORS.length]}" stroke-width="26"
+        stroke-dasharray="${Math.max(0, len - 1.5)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;
+      off += len;
+    });
+    const label = k => statBy === 'cat' ? `${CAT[k] ? CAT[k].icon + ' ' + CAT[k].name : k}`
+      : (k === '_none' ? '未指定帳戶' : (ACCT_T[(db.accounts.find(a => a.id === k) || {}).type] || { icon: '' }).icon + ' ' + esc(acctName(k) || '（已刪除的帳戶）'));
+    $('#money-stat-body').innerHTML = `<div class="card">${sum}</div>` + (arr.length ? `
+      <div class="card donut"><svg viewBox="0 0 180 180" width="190" height="190"><circle r="70" cx="90" cy="90" fill="none" stroke="var(--line2)" stroke-width="26"/>${ring}</svg>
+        <div class="dc"><span>${statKind === 'expense' ? '支出' : '收入'}</span><b>${money(total)}</b></div></div>
+      ${arr.map(([k, g], i) => `<div class="srank"><span class="sl">${label(k)}</span><b>${money(g.sum)}</b>
+        <div class="bar"><i style="width:${total ? g.sum / total * 100 : 0}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"></i></div>
+        <small>${g.n} 筆</small><small class="r">${total ? Math.round(g.sum / total * 100) : 0}%</small></div>`).join('')}`
+      : `<p class="empty">這個月沒有${statKind === 'expense' ? '支出' : '收入'}紀錄</p>`);
+  } else {
+    const net = db.accounts.reduce((s, a) => s + acctBalance(a), 0);
+    let h = `<div class="card"><div class="mbal" style="border:0;margin:0;padding:0"><span>淨資產（所有帳戶加總）</span><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b></div></div>`;
+    for (const [k, icon, name] of ACCT_TYPES) {
+      const as = db.accounts.filter(a => a.type === k);
+      if (!as.length) continue;
+      const sub = as.reduce((s, a) => s + acctBalance(a), 0);
+      h += `<div class="sec acc-sec"><span>${icon} ${name}</span><span>${money(sub)}</span></div>` +
+        as.map(a => { const b = acctBalance(a); return `<button class="arow" data-id="${a.id}"><span class="xt">${esc(a.name)}${a.last4 ? `<small>${name}（${esc(a.last4)}）</small>` : `<small>${name}</small>`}</span>
+          <b class="${b < 0 ? 'neg' : ''}">${money(b)}</b></button>`; }).join('');
+    }
+    if (!db.accounts.length) h += '<p class="empty">還沒有帳戶。按下面「＋ 新增帳戶」，把信用卡、銀行、現金加進來，輸入現在的餘額就好。</p>';
+    h += '<div class="btns"><button class="primary" id="acct-add">＋ 新增帳戶</button></div><p class="tray-hint">卡號只要記末四碼就好，不要輸入完整卡號或密碼。</p>';
+    $('#money-acct').innerHTML = h;
+    $('#acct-add').onclick = () => openAccount(null);
   }
-  $('#money-list').innerHTML = h || '<p class="empty">這個月還沒有記帳，按右上角「＋」記第一筆吧</p>';
+}
+
+function acctOptions(sel, allowNone) {
+  return (allowNone ? `<option value="">（不指定）</option>` : '') +
+    ACCT_TYPES.map(([k, , n]) => { const as = db.accounts.filter(a => a.type === k); return as.length ? `<optgroup label="${n}">${as.map(a =>
+      `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</optgroup>` : ''; }).join('');
 }
 
 function openExpense(x) {
   const isNew = !x;
-  const v = x || { amount: '', cat: 'food', payer: 'sarah', date: ymd(new Date()), note: '' };
+  const v = x || { type: 'expense', amount: '', cat: 'food', payer: '', date: ymd(new Date()), note: '', acct: (db.accounts[0] || {}).id || '' };
+  let type = txType(v);
+  const catGrid = (list, cur) => list.map(([k, i, n]) => `<button type="button" data-cat="${k}" class="${k === cur ? 'on' : ''}">${i}<span>${n}</span></button>`).join('');
   openSheet(`
     <h3>${isNew ? '記一筆' : '修改這筆'}</h3>
-    <label>多少錢？</label><input id="x-amt" type="number" inputmode="decimal" step="0.01" min="0" value="${v.amount}" placeholder="0" class="big">
-    <label>類別</label>
-    <div class="catgrid">${CATS.map(([k, i, n]) => `<button type="button" data-cat="${k}" class="${k === v.cat ? 'on' : ''}">${i}<span>${n}</span></button>`).join('')}</div>
-    <label>誰付的？</label>
-    <div class="seg seg3">${['ben', 'sarah', 'both'].map(o => `<button type="button" class="${o}${o === v.payer ? ' on' : ''}" data-owner="${o}">${NAMES[o]}</button>`).join('')}</div>
+    <div class="seg seg3 ttype">${[['expense', '支出'], ['income', '收入'], ['transfer', '轉帳']].map(([k, n]) =>
+      `<button type="button" data-t="${k}" class="${k === type ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <label>多少錢？</label><input id="x-amt" type="number" inputmode="decimal" step="0.01" min="0" value="${v.amount}" placeholder="0.00" class="big">
+    <div id="x-catbox"><label>類別</label><div class="catgrid" id="x-cats"></div></div>
+    <label id="x-acct-l">${type === 'income' ? '存進哪個帳戶' : type === 'transfer' ? '從哪個帳戶轉出' : '用哪個帳戶付'}</label>
+    <select id="x-acct">${acctOptions(v.acct, true)}</select>
+    <div id="x-tobox"><label>轉進哪個帳戶</label><select id="x-to">${acctOptions(v.toAcct, true)}</select>
+      <p class="hint">例如：用銀行帳戶繳信用卡費，就是「銀行 → 信用卡」。</p></div>
+    <div id="x-payerbox"><label>誰付的？<span class="opt-tag">可不選</span></label>
+      <div class="seg seg3" id="x-payer">${['ben', 'sarah', 'both'].map(o => `<button type="button" class="${o}${o === v.payer ? ' on' : ''}" data-owner="${o}">${NAMES[o]}</button>`).join('')}</div></div>
     <label>日期</label><input id="x-date" type="date" value="${v.date}">
-    <label>備註（可以不填）</label><input id="x-note" value="${esc(v.note || '')}" placeholder="例如：超市、和朋友吃飯">
+    <label>備註（可以不填）</label><input id="x-note" value="${esc(v.note || '')}" placeholder="例如：Woolworths、和朋友吃飯">
+    ${db.accounts.length ? '' : '<p class="hint">還沒有帳戶的話，先到記帳的「帳戶」分頁新增，餘額才會自動加減。</p>'}
     <p class="err" id="x-err"></p>
     <div class="btns"><button class="primary" id="x-save">儲存</button>
       ${isNew ? '' : '<button class="danger" id="x-del">刪除</button>'}<button id="x-cancel">取消</button></div>`);
-  bindSeg();
+  let cat = v.cat;
+  const paint = () => {
+    document.querySelectorAll('.ttype button').forEach(b => b.classList.toggle('on', b.dataset.t === type));
+    $('#x-catbox').hidden = type === 'transfer';
+    $('#x-tobox').hidden = type !== 'transfer';
+    $('#x-payerbox').hidden = type !== 'expense';
+    $('#x-acct-l').textContent = type === 'income' ? '存進哪個帳戶' : type === 'transfer' ? '從哪個帳戶轉出' : '用哪個帳戶付';
+    const list = type === 'income' ? INCATS : CATS;
+    if (!list.some(([k]) => k === cat)) cat = list[0][0];
+    $('#x-cats').innerHTML = catGrid(list, cat);
+  };
+  paint();
   if (isNew) setTimeout(() => $('#x-amt').focus(), 50);
-  $('#sheet .catgrid').onclick = e => { const b = e.target.closest('button'); if (!b) return;
-    $('#sheet .catgrid').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b)); };
+  $('#sheet .ttype').onclick = e => { const b = e.target.closest('button'); if (!b) return; type = b.dataset.t; paint(); };
+  $('#x-cats').onclick = e => { const b = e.target.closest('button'); if (!b) return; cat = b.dataset.cat; paint(); };
+  $('#x-payer').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+    const on = !b.classList.contains('on'); $('#x-payer').querySelectorAll('button').forEach(z => z.classList.remove('on')); if (on) b.classList.add('on'); };
   $('#x-amt').oninput = () => $('#x-err').textContent = '';
   $('#x-cancel').onclick = closeSheet;
   $('#x-save').onclick = () => {
     const amount = Math.round(parseFloat($('#x-amt').value) * 100) / 100;
     if (!(amount > 0)) return $('#x-err').textContent = '請輸入金額';
     if (!$('#x-date').value) return $('#x-err').textContent = '請選日期';
-    const data = { amount, cat: $('#sheet .catgrid .on').dataset.cat, payer: segValue(), date: $('#x-date').value, note: $('#x-note').value.trim() };
+    const acct = $('#x-acct').value, toAcct = $('#x-to').value;
+    if (type === 'transfer' && (!acct || !toAcct)) return $('#x-err').textContent = '轉帳要選轉出和轉進的帳戶';
+    if (type === 'transfer' && acct === toAcct) return $('#x-err').textContent = '轉出和轉進不能是同一個帳戶';
+    const pb = $('#x-payer .on');
+    const data = { type, amount, cat: type === 'transfer' ? 'transfer' : cat, acct, toAcct: type === 'transfer' ? toAcct : '',
+      payer: type === 'expense' && pb ? pb.dataset.owner : '', date: $('#x-date').value, note: $('#x-note').value.trim() };
     if (isNew) db.expenses.push({ id: uid(), t: Date.now(), ...data }); else Object.assign(x, data);
     save(); closeSheet(); moneyMonth = data.date.slice(0, 7); renderMoney(); toast('記好了');
   };
   if (!isNew) $('#x-del').onclick = () => {
     $('#x-del').outerHTML = '<button class="danger" id="x-del2">確定刪除</button>';
     $('#x-del2').onclick = () => { db.expenses = db.expenses.filter(z => z !== x); save(); closeSheet(); renderMoney(); toast('已刪除'); };
+  };
+}
+
+function openAccount(a) {
+  const isNew = !a;
+  const v = a || { name: '', type: 'bank', last4: '' };
+  const bal = a ? acctBalance(a) : '';
+  openSheet(`
+    <h3>${isNew ? '新增帳戶' : '修改帳戶'}</h3>
+    <label>帳戶名稱</label><input id="a-name" value="${esc(v.name)}" placeholder="例如：NAB 信用卡、Ubank、現金">
+    <label>種類</label>
+    <div class="seg seg3" id="a-type">${ACCT_TYPES.map(([k, i, n]) => `<button type="button" data-k="${k}" class="${k === v.type ? 'on' : ''}">${i} ${n}</button>`).join('')}</div>
+    <label>卡號或帳號末四碼 <span class="opt-tag">可不填</span></label><input id="a-last4" inputmode="numeric" maxlength="4" value="${esc(v.last4 || '')}" placeholder="1234">
+    <label id="a-bal-l">${v.type === 'credit' ? '現在欠多少（未繳的卡費）' : '現在有多少錢'}</label>
+    <input id="a-bal" type="number" inputmode="decimal" step="0.01" value="${a ? Math.abs(v.type === 'credit' ? Math.min(0, bal) : bal) : ''}" placeholder="0.00">
+    <p class="hint" id="a-hint">${isNew ? '輸入現在的金額就好，之後每記一筆會自動加減。' : '如果跟銀行對不起來，直接改成正確金額，App 會自動校正。'}</p>
+    <p class="err" id="a-err"></p>
+    <div class="btns"><button class="primary" id="a-save">儲存</button>
+      ${isNew ? '' : '<button class="danger" id="a-del">刪除帳戶</button>'}<button id="a-cancel">取消</button></div>`);
+  let type = v.type;
+  $('#a-type').onclick = e => { const b = e.target.closest('button'); if (!b) return; type = b.dataset.k;
+    $('#a-type').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b));
+    $('#a-bal-l').textContent = type === 'credit' ? '現在欠多少（未繳的卡費）' : '現在有多少錢'; };
+  $('#a-last4').oninput = () => { $('#a-last4').value = $('#a-last4').value.replace(/\D/g, '').slice(0, 4); };
+  $('#a-cancel').onclick = closeSheet;
+  $('#a-save').onclick = () => {
+    const name = $('#a-name').value.trim();
+    if (!name) return $('#a-err').textContent = '請寫帳戶名稱';
+    let want = parseFloat($('#a-bal').value) || 0;
+    if (type === 'credit') want = -Math.abs(want);             // 信用卡：欠款記成負數
+    const acc = a || { id: uid(), init: 0 };
+    Object.assign(acc, { name, type, last4: $('#a-last4').value });
+    if (!a) db.accounts.push(acc);
+    acc.init = 0; acc.init = Math.round((want - acctBalance(acc)) * 100) / 100;   // 讓「現在餘額」剛好等於輸入的金額
+    save(); closeSheet(); renderMoney(); toast('已儲存');
+  };
+  if (!isNew) $('#a-del').onclick = () => {
+    const n = db.expenses.filter(x => x.acct === a.id || x.toAcct === a.id).length;
+    $('#a-del').outerHTML = `<button class="danger" id="a-del2">確定刪除${n ? `（${n} 筆紀錄會變成「未指定帳戶」）` : ''}</button>`;
+    $('#a-del2').onclick = () => {
+      db.expenses.forEach(x => { if (x.acct === a.id) x.acct = ''; if (x.toAcct === a.id) x.toAcct = ''; });
+      db.accounts = db.accounts.filter(z => z !== a); save(); closeSheet(); renderMoney(); toast('已刪除');
+    };
   };
 }
 
@@ -865,6 +1007,10 @@ function bindMoneyStock() {
   $('#money-next').onclick = () => { const [y, m] = moneyMonth.split('-').map(Number); moneyMonth = ymd(new Date(y, m, 1)).slice(0, 7); renderMoney(); };
   $('#money-add').onclick = () => openExpense(null);
   $('#money-list').onclick = e => { const b = e.target.closest('.xrow'); if (b) openExpense(db.expenses.find(x => x.id === b.dataset.id)); };
+  document.querySelectorAll('.mntabs button').forEach(b => b.onclick = () => { moneyTab = b.dataset.tab; renderMoney(); });
+  document.querySelectorAll('.st-kind button').forEach(b => b.onclick = () => { statKind = b.dataset.k; renderMoney(); });
+  document.querySelectorAll('.st-by button').forEach(b => b.onclick = () => { statBy = b.dataset.b; renderMoney(); });
+  $('#money-acct').onclick = e => { const b = e.target.closest('.arow'); if (b) openAccount(db.accounts.find(a => a.id === b.dataset.id)); };
   document.querySelectorAll('.stabs button').forEach(b => b.onclick = () => { stockTab = b.dataset.tab; renderStock(); });
   $('#stock-add').onclick = () => openStock(null);
   $('#stock-list').onclick = e => {
