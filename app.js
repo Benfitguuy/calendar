@@ -1,9 +1,11 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
-const NAMES = { ben: 'Ben', sarah: 'Sarah', both: '兩人一起' };
+const NAMES = { ben: '👦 Ben', sarah: '👧 Sarah', both: '♥ 一起', work: '💼 公事' };
+const OWNERS = ['ben', 'sarah', 'both', 'work'];
+const isShared = o => o === 'both' || o === 'work';   // 橫跨兩欄的行程
 const REPEAT = { none: '不重複', daily: '每天', weekdays: '平日（週一到五）', weekly: '每週同一天' };
 const WEEK = '日一二三四五六';
 
@@ -102,9 +104,9 @@ function renderEvents() {
   for (const it of items) {
     const o = it.ev.owner, top = it.s / 60 * HOUR, ht = Math.max(24, (it.e - it.s) / 60 * HOUR - 2);
     let left, width;
-    if (o === 'both') { left = 0; width = 100; }
+    if (isShared(o)) { left = 0; width = 100; }
     else { const base = o === 'ben' ? 0 : 50; width = 50 / it.n; left = base + it.lane * width; }
-    const icon = /起床/.test(it.ev.title) ? '☀︎ ' : /就寢|睡/.test(it.ev.title) ? '☾ ' : o === 'both' ? '♥ ' : '';
+    const icon = /起床/.test(it.ev.title) ? '☀︎ ' : /就寢|睡/.test(it.ev.title) ? '☾ ' : o === 'both' ? '♥ ' : o === 'work' ? '💼 ' : '';
     h += `<div class="ev ${o}" data-id="${it.ev.id}" style="top:${top + 1}px;height:${ht}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px)">
       <b>${icon}${esc(it.ev.title)}</b>${ht >= 36 ? `<small>${it.ev.start}–${it.ev.end}${it.ev.repeat !== 'none' ? ' · ↻' + REPEAT[it.ev.repeat] : ''}</small>` : ''}</div>`;
   }
@@ -137,7 +139,7 @@ function toast(msg) {
 function openSheet(html) { $('#sheet').innerHTML = html; $('#sheetwrap').hidden = false; }
 function closeSheet() { $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
 function segHtml(owner) {
-  return `<div class="seg">${['ben', 'sarah', 'both'].map(o =>
+  return `<div class="seg">${OWNERS.map(o =>
     `<button type="button" class="${o}${o === owner ? ' on' : ''}" data-owner="${o}">${NAMES[o]}</button>`).join('')}</div>`;
 }
 function bindSeg() {
@@ -278,7 +280,7 @@ function updateDrop() {
   let start = Math.round(((drag.y - br.top) / HOUR * 60 - 15) / 15) * 15;
   start = Math.max(0, Math.min(1440 - mins, start));
   drag.drop = start;
-  const o = drag.t.owner, left = o === 'sarah' ? 50 : 0, width = o === 'both' ? 100 : 50;
+  const o = drag.t.owner, left = o === 'sarah' ? 50 : 0, width = isShared(o) ? 100 : 50;
   if (pv.parentNode !== box) box.appendChild(pv);
   pv.hidden = false;
   pv.className = '';
