@@ -1,13 +1,14 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.12.0';
+const APP_VERSION = '0.13.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
 const OWNERS = ['ben', 'sarah', 'both', 'work'];
 const isShared = o => o === 'both' || o === 'work';   // 橫跨兩欄的行程
-const REPEAT = { none: '不重複', daily: '每天', weekdays: '平日（週一到五）', weekly: '每週同一天' };
+const REPEAT = { none: '不重複', daily: '每天', weekly: '每週', monthly: '每月', yearly: '每年', weekdays: '平日（週一到五）' };
+const REPEAT_MENU = ['none', 'daily', 'weekly', 'monthly', 'yearly'];   // 選單顯示這幾個（舊的「平日」只在原本有用時出現）
 const WEEK = '日一二三四五六';
 const WEEK_MON = '一二三四五六日';           // 一週從星期一開始
 const monOffset = d => (d.getDay() + 6) % 7;   // 星期一＝0 … 星期日＝6
@@ -66,6 +67,8 @@ function occursOn(e, day) {
     case 'daily': return true;
     case 'weekdays': return dow >= 1 && dow <= 5;
     case 'weekly': return dow === parseYmd(e.date).getDay();
+    case 'monthly': return day.slice(8) === e.date.slice(8);          // 每月同一號（沒有 31 號的月份就跳過）
+    case 'yearly': return day.slice(5) === e.date.slice(5);           // 每年同一天
     default: return day === e.date;
   }
 }
@@ -88,7 +91,7 @@ function renderHeader() {
 
 function buildHours() {
   let h = '';
-  for (let i = 0; i <= 24; i++) h += `<div class="hr" style="top:${i * HOUR}px"><span>${pad(i % 24)}:00</span></div>`;
+  for (let i = 0; i <= 24; i++) h += `<div class="hr" style="top:${i * HOUR}px"><span>${pad(i % 24)}:00</span><span class="r">${pad(i % 24)}:00</span></div>`;
   $('#hours').innerHTML = h;
 }
 
@@ -184,7 +187,7 @@ function openEvent(e, preset = {}) {
     </div>
     <div id="f-endbox"${endSel === 'custom' ? '' : ' hidden'}><label>結束時間</label><input id="f-end" type="time" step="300" value="${v.end || toTime(toMin(v.start) + 90)}"></div>
     <label>重複</label>
-    <select id="f-repeat">${Object.entries(REPEAT).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    <select id="f-repeat">${Object.entries(REPEAT).filter(([k]) => REPEAT_MENU.includes(k) || k === v.repeat).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
     <label>備註</label><input id="f-note" value="${esc(v.note || '')}" placeholder="例如：記得帶健保卡、地址">
     ${!isNew && rep ? '<p class="hint">這是重複的行程，修改會套用到每一天。</p>' : ''}
     <p class="err" id="f-err"></p>
