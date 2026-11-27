@@ -7,16 +7,16 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="我們的行事曆">
-<meta name="theme-color" content="#FBE3EA">
+<meta name="theme-color" content="#E2EEFA">
 <title>我們的行事曆</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-v2.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@400..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="th-day">
 <div id="app">
 
   <!-- 頁面一：今天（時間軸） -->
@@ -71,8 +71,10 @@
     <div class="mtabs"><button data-mode="events">行事曆</button><button data-mode="period">經期</button></div>
     <main class="mscroll">
       <div id="cycle-card"></div>
-      <div class="mweek"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
-      <div id="mgrid"></div>
+      <div class="mframe">
+        <div class="mweek"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div id="mgrid"></div>
+      </div>
       <div class="legend" id="legend"></div>
       <p class="tray-hint" id="m-hint"></p>
     </main>
