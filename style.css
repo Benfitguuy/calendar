@@ -5,7 +5,7 @@
   --sarah-bg:#EAF3DE; --sarah-fg:#27500A; --sarah-bd:#639922;
   --both-bg:#FCEBEB; --both-fg:#791F1F; --both-bd:#E24B4A;
   --work-bg:#FAEEDA; --work-fg:#633806; --work-bd:#BA7517;
-  --hour:60px; --gutter:48px;
+  --hour:60px; --gutter:48px; --gutter-r:46px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
@@ -29,7 +29,7 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 .day.today .n{color:var(--both-bd)}
 .day.sel .n{background:var(--text);color:var(--bg)}
 
-.colhead{display:grid;grid-template-columns:var(--gutter) 1fr 1fr;gap:6px;padding:8px 8px 0 0}
+.colhead{display:grid;grid-template-columns:var(--gutter) 1fr 1fr var(--gutter-r);gap:6px;padding:8px 0 0 0}
 .ch{display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:14px;font-weight:600;border-radius:10px;padding:5px 0}
 .ch.ben{background:var(--ben-bg);color:var(--ben-fg)}
 .ch.sarah{background:var(--sarah-bg);color:var(--sarah-fg)}
@@ -39,7 +39,7 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 #grid{position:relative;height:calc(var(--hour) * 24 + 16px);margin-top:8px}
 .hr{position:absolute;left:0;right:0;border-top:1px solid var(--line2)}
 .hr span{position:absolute;left:6px;top:-8px;font-size:11px;color:var(--muted);background:var(--card);padding-right:4px}
-#events{position:absolute;left:var(--gutter);right:8px;top:0;bottom:0}
+#events{position:absolute;left:var(--gutter);right:var(--gutter-r);top:0;bottom:0}
 #events::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed var(--line)}
 
 .ev{position:absolute;border-radius:10px;padding:4px 7px;font-size:13px;overflow:hidden;
@@ -261,3 +261,4 @@ body.th-stock{--bg:#DCF2E7;--card:#F6FCF9;--line:#C5E6D5;--line2:#E1F3EA;--soft:
 #tabs button.on{color:var(--text)}
 #tabs button.on .tico{background:var(--soft);border-radius:12px;padding:0 14px}
 .mframe{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:10px 6px 6px;box-shadow:0 2px 0 var(--line)}
+.hr span.r{left:auto;right:4px;padding:0 0 0 4px}
