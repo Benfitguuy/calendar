@@ -15,41 +15,76 @@
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="top">
-      <h1 id="month"></h1>
-      <div class="top-btns">
-        <button id="today" class="pill">今天</button>
-        <button id="add" class="round" aria-label="新增行程">＋</button>
+
+  <!-- 頁面一：今天（時間軸） -->
+  <div id="page-day" class="page">
+    <header>
+      <div class="top">
+        <h1 id="month"></h1>
+        <div class="top-btns">
+          <button id="today" class="pill">今天</button>
+          <button id="add" class="round" aria-label="新增行程">＋</button>
+        </div>
       </div>
-    </div>
-    <div class="week">
-      <button id="prev" class="arrow" aria-label="上一週">‹</button>
-      <div id="days"></div>
-      <button id="next" class="arrow" aria-label="下一週">›</button>
-    </div>
-    <div class="colhead">
-      <span></span>
-      <span class="ch ben">👦 Ben</span>
-      <span class="ch sarah">👧 Sarah</span>
-    </div>
-  </header>
+      <div class="week">
+        <button id="prev" class="arrow" aria-label="上一週">‹</button>
+        <div id="days"></div>
+        <button id="next" class="arrow" aria-label="下一週">›</button>
+      </div>
+      <div class="colhead">
+        <span></span>
+        <span class="ch ben"><img class="av" src="icons/boy.svg" alt="">Ben</span>
+        <span class="ch sarah"><img class="av" src="icons/girl.svg" alt="">Sarah</span>
+      </div>
+    </header>
 
-  <main id="scroller">
-    <div id="grid">
-      <div id="hours"></div>
-      <div id="events"></div>
-    </div>
-  </main>
+    <main id="scroller">
+      <div id="grid">
+        <div id="hours"></div>
+        <div id="events"></div>
+      </div>
+    </main>
 
-  <section id="tray">
-    <div class="tray-head">
-      <span>待安排 <b id="tcount"></b></span>
-      <button id="addtodo" class="pill">＋ 新增</button>
-    </div>
-    <div id="chips"></div>
-    <p class="tray-hint">按住待辦拖到上面就排好了；已排好的行程「久按」可以再移動</p>
-  </section>
+    <section id="tray">
+      <div class="tray-head">
+        <span>待安排 <b id="tcount"></b></span>
+        <button id="addtodo" class="pill">＋ 新增</button>
+      </div>
+      <div id="chips"></div>
+      <p class="tray-hint">按住待辦拖到上面就排好了；已排好的行程「久按」可以再移動</p>
+    </section>
+  </div>
+
+  <!-- 頁面二：月曆＋經期 -->
+  <div id="page-month" class="page" hidden>
+    <header>
+      <div class="top">
+        <h1 id="m-title"></h1>
+        <div class="top-btns">
+          <button id="m-prev" class="arrow" aria-label="上個月">‹</button>
+          <button id="m-today" class="pill">本月</button>
+          <button id="m-next" class="arrow" aria-label="下個月">›</button>
+        </div>
+      </div>
+    </header>
+    <main class="mscroll">
+      <div id="cycle-card"></div>
+      <div class="mweek"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+      <div id="mgrid"></div>
+      <div class="legend">
+        <span><i class="lg period"></i>經期</span>
+        <span><i class="lg predict"></i>預測</span>
+        <span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span>
+        <span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>
+      </div>
+      <p class="tray-hint">點一下日期：看那天的行程、記錄經期。經期紀錄只存在這支手機，不會給別人看到。</p>
+    </main>
+  </div>
+
+  <nav id="tabs">
+    <button data-page="day" class="on"><span class="tico">◷</span>今天</button>
+    <button data-page="month"><span class="tico">▦</span>月曆</button>
+  </nav>
 </div>
 
 <div id="sheetwrap" hidden><div id="sheet"></div></div>
