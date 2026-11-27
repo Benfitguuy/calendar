@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.14.0';
+const APP_VERSION = '0.15.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -677,7 +677,7 @@ function openDay(day, edit = false) {
 function showPage(name) {
   ['day', 'month', 'money', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.body.className = 'th-' + name;                      // 每個分頁不同顏色
-  const tc = { day: '#E2EEFA', month: '#FBE3EA', money: '#FFF1D2', stock: '#DCF2E7' }[name];
+  const tc = { day: '#E2EEFA', month: '#FBE3EA', money: '#E4EEE4', stock: '#ECE6F7' }[name];
   document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
   if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
@@ -722,6 +722,16 @@ const INCATS = [['salary', '💼', '薪水'], ['bonus', '🎁', '獎金'], ['ref
   ['side', '💡', '副業'], ['other_in', '💰', '其他收入']];
 const CAT = Object.fromEntries([...CATS, ...INCATS].map(([k, i, n]) => [k, { icon: i, name: n }]));
 CAT.transfer = { icon: '⇄', name: '轉帳' };
+CAT.adjust = { icon: '⚖️', name: '餘額校正' };
+// 自訂分類（例如從 DuoPurse 匯入的「外食」「人情」），存在 db.cats
+function allCats(kind) {
+  return (kind === 'income' ? INCATS : CATS).concat((db.cats || []).filter(c => c.kind === kind).map(c => [c.k, c.icon, c.name]));
+}
+function catInfo(k) {
+  if (CAT[k]) return CAT[k];
+  const c = (db.cats || []).find(z => z.k === k);
+  return c ? { icon: c.icon, name: c.name } : { icon: '🏷️', name: '其他' };
+}
 const PAYER = { ben: 'Ben 付', sarah: 'Sarah 付', both: '一起付' };
 const ACCT_TYPES = [['credit', '💳', '信用卡'], ['bank', '🏦', '銀行'], ['cash', '💵', '現金']];
 const ACCT_T = Object.fromEntries(ACCT_TYPES.map(([k, i, n]) => [k, { icon: i, name: n }]));
@@ -730,12 +740,15 @@ if (!db.accounts) { db.accounts = []; save(); }
 const money = n => (n < 0 ? '-' : '') + 'A$' + Math.abs(Math.round(n * 100) / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const txType = x => x.type || 'expense';
 let moneyMonth = ymd(new Date()).slice(0, 7);
-let moneyTab = 'list', statKind = 'expense', statBy = 'cat';
+let moneyTab = 'acct', statKind = 'expense', statBy = 'cat';
 
 function acctBalance(a) {                      // 帳戶餘額：起始金額＋收入－支出±轉帳
   let b = a.init || 0;
+  const today = ymd(new Date());
   for (const x of db.expenses) {
+    if (x.date > today) continue;                // 未來日期的（預先排好的扣款）還不算進餘額
     const t = txType(x);
+    if (t === 'adjust' && x.acct === a.id) { b += x.amount; continue; }   // 餘額校正：金額有正有負
     if (t === 'income' && x.acct === a.id) b += x.amount;
     else if (t === 'expense' && x.acct === a.id) b -= x.amount;
     else if (t === 'transfer') { if (x.acct === a.id) b -= x.amount; if (x.toAcct === a.id) b += x.amount; }
@@ -760,12 +773,12 @@ function renderMoney() {
     let h = '', last = '';
     for (const x of list) {
       if (x.date !== last) { last = x.date; const d = parseYmd(x.date); h += `<div class="mday-h">${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）</div>`; }
-      const t = txType(x), c = t === 'transfer' ? CAT.transfer : (CAT[x.cat] || CAT.other);
+      const t = txType(x), c = t === 'transfer' ? CAT.transfer : t === 'adjust' ? CAT.adjust : catInfo(x.cat);
       const sub = t === 'transfer' ? `${esc(acctName(x.acct) || '?')} → ${esc(acctName(x.toAcct) || '?')}`
-        : [acctName(x.acct), x.payer && t === 'expense' ? PAYER[x.payer] : ''].filter(Boolean).map(esc).join('・');
-      h += `<button class="xrow" data-id="${x.id}"><span class="ci">${c.icon}</span>
-        <span class="xt">${esc(x.note || c.name)}${sub ? `<small>${sub}</small>` : ''}</span>
-        <b class="${t === 'income' ? 'pos' : t === 'expense' ? 'neg' : ''}">${t === 'income' ? '+' : t === 'expense' ? '-' : ''}${money(x.amount).replace('-', '')}</b></button>`;
+        : [acctName(x.acct), x.note && x.merchant ? x.merchant : '', x.payer && t === 'expense' ? PAYER[x.payer] : ''].filter(Boolean).map(esc).join('・');
+      h += `<button class="xrow${t === 'adjust' ? ' adj' : ''}${x.date > ymd(new Date()) ? ' future' : ''}" data-id="${x.id}"><span class="ci">${c.icon}</span>
+        <span class="xt">${esc(x.note || x.merchant || c.name)}${sub ? `<small>${sub}</small>` : ''}</span>
+        <b class="${t === 'income' ? 'pos' : t === 'expense' ? 'neg' : ''}">${t === 'income' ? '+' : t === 'expense' ? '-' : t === 'adjust' ? (x.amount >= 0 ? '+' : '-') : ''}${money(x.amount).replace('-', '')}</b></button>`;
     }
     $('#money-list').innerHTML = `<div class="card">${sum}</div>` + (h || '<p class="empty">這個月還沒有記帳，按右上角「＋」記第一筆吧</p>');
   } else if (moneyTab === 'stat') {
@@ -788,7 +801,7 @@ function renderMoney() {
         stroke-dasharray="${Math.max(0, len - 1.5)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;
       off += len;
     });
-    const label = k => statBy === 'cat' ? `${CAT[k] ? CAT[k].icon + ' ' + CAT[k].name : k}`
+    const label = k => statBy === 'cat' ? `${catInfo(k).icon} ${esc(catInfo(k).name)}`
       : (k === '_none' ? '未指定帳戶' : (ACCT_T[(db.accounts.find(a => a.id === k) || {}).type] || { icon: '' }).icon + ' ' + esc(acctName(k) || '（已刪除的帳戶）'));
     $('#money-stat-body').innerHTML = `<div class="card">${sum}</div>` + (arr.length ? `
       <div class="card donut"><svg viewBox="0 0 180 180" width="190" height="190"><circle r="70" cx="90" cy="90" fill="none" stroke="var(--line2)" stroke-width="26"/>${ring}</svg>
@@ -809,9 +822,10 @@ function renderMoney() {
           <b class="${b < 0 ? 'neg' : ''}">${money(b)}</b></button>`; }).join('');
     }
     if (!db.accounts.length) h += '<p class="empty">還沒有帳戶。按下面「＋ 新增帳戶」，把信用卡、銀行、現金加進來，輸入現在的餘額就好。</p>';
-    h += '<div class="btns"><button class="primary" id="acct-add">＋ 新增帳戶</button></div><p class="tray-hint">卡號只要記末四碼就好，不要輸入完整卡號或密碼。</p>';
-    $('#money-acct').innerHTML = h;
+    h += '<div class="btns"><button class="primary" id="acct-add">＋ 新增帳戶</button><button id="csv-btn">從 DuoPurse 匯入（CSV 檔）</button></div><p class="tray-hint">卡號只要記末四碼就好，不要輸入完整卡號或密碼。</p>';
+    $('#money-acct').innerHTML = renderIsland(net) + h;
     $('#acct-add').onclick = () => openAccount(null);
+    $('#csv-btn').onclick = () => $('#csv-file').click();
   }
 }
 
@@ -851,7 +865,7 @@ function openExpense(x) {
     $('#x-tobox').hidden = type !== 'transfer';
     $('#x-payerbox').hidden = type !== 'expense';
     $('#x-acct-l').textContent = type === 'income' ? '存進哪個帳戶' : type === 'transfer' ? '從哪個帳戶轉出' : '用哪個帳戶付';
-    const list = type === 'income' ? INCATS : CATS;
+    const list = allCats(type);
     if (!list.some(([k]) => k === cat)) cat = list[0][0];
     $('#x-cats').innerHTML = catGrid(list, cat);
   };
@@ -923,6 +937,140 @@ function openAccount(a) {
       db.accounts = db.accounts.filter(z => z !== a); save(); closeSheet(); renderMoney(); toast('已刪除');
     };
   };
+}
+
+// ---------- 餘額校正（匯入時用來對齊帳戶餘額；不算進收支統計） ----------
+function openAdjust(x) {
+  openSheet(`<h3>⚖️ 餘額校正</h3>
+    <p class="hint">這筆是用來把「${esc(acctName(x.acct) || '帳戶')}」的餘額對齊用的，不算支出也不算收入，統計裡不會出現。</p>
+    <div class="summary"><div><span>金額</span><b>${x.amount >= 0 ? '+' : ''}${money(x.amount)}</b></div><div><span>日期</span><b>${x.date}</b></div></div>
+    <div class="btns"><button class="danger" id="j-del">刪除這筆</button><button id="j-close">關閉</button></div>`);
+  $('#j-close').onclick = closeSheet;
+  $('#j-del').onclick = () => { db.expenses = db.expenses.filter(z => z !== x); save(); closeSheet(); renderMoney(); toast('已刪除'); };
+}
+
+// ---------- 從 DuoPurse 匯入 CSV ----------
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  text = text.replace(/^﻿/, '');
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += ch;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+const CAT_MAP = { '交通': 'transport', '其他': 'other', '買菜': 'grocery', '購物': 'shopping', '娛樂': 'fun', '帳單': 'bills' };
+const INCAT_MAP = { '薪資': 'salary', '薪水': 'salary', '獎金': 'bonus', '退款': 'refund', '利息': 'interest', '其他': 'other_in' };
+const CAT_ICON = { '外食': '🍜', '家用': '🏠', '工作': '💼', '人情': '🎁', '台灣副卡': '💳', '醫療/保險/健身房': '💊', '接案': '💡' };
+function guessAcctType(name) { return /現金|cash/i.test(name) ? 'cash' : /結算|繳費|信用卡|卡|visa|master|amex/i.test(name) ? 'credit' : 'bank'; }
+
+function importCSV(text) {
+  const rows = parseCSV(text);
+  const head = rows.shift() || [];
+  const col = n => head.indexOf(n);
+  const need = ['日期', '類型', '金額', '帳戶'];
+  if (need.some(n => col(n) < 0)) { toast('看不懂這個檔案，請用 DuoPurse 匯出的 CSV'); return; }
+  const get = (r, n) => (col(n) >= 0 ? (r[col(n)] || '').trim() : '');
+  const seen = {}, keyOf = r => { const k = head.map((h, i) => r[i]).join('|'); seen[k] = (seen[k] || 0) + 1; return k + '#' + seen[k]; };
+  const have = new Set(db.expenses.filter(x => x.src).map(x => x.src));
+  const acctNames = new Set(), items = [];
+  for (const r of rows) {
+    const date = get(r, '日期'), t = get(r, '類型'), amt = parseFloat(get(r, '金額')), local = parseFloat(get(r, '本幣金額'));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !(amt >= 0)) continue;
+    const src = 'duo:' + keyOf(r);
+    const it = { date, time: get(r, '時間'), t, amt, local: isNaN(local) ? amt : local, acct: get(r, '帳戶'), to: get(r, '轉入帳戶'),
+      cat: get(r, '分類'), item: get(r, '品項'), merchant: get(r, '商家'), note: get(r, '備註'), who: get(r, '記錄者'), src, dup: have.has(src) };
+    if (it.acct) acctNames.add(it.acct); if (it.to) acctNames.add(it.to);
+    items.push(it);
+  }
+  const fresh = items.filter(i => !i.dup);
+  const newAccts = [...acctNames].filter(n => !db.accounts.some(a => a.name === n));
+  openSheet(`<h3>從 DuoPurse 匯入</h3>
+    <div class="summary"><div><span>紀錄</span><b>${items.length} 筆${items.length - fresh.length ? `（${items.length - fresh.length} 筆已經匯入過，會跳過）` : ''}</b></div>
+      <div><span>帳戶</span><b>${[...acctNames].map(esc).join('、') || '—'}</b></div>
+      ${newAccts.length ? `<div><span>新帳戶</span><b>會自動新增 ${newAccts.length} 個</b></div>` : ''}</div>
+    <p class="hint">沒有分類的「支出」（DuoPurse 用來調整餘額的）會變成「餘額校正」，不算進收支統計。匯入後會請你確認每個帳戶現在的餘額。</p>
+    <div class="btns"><button class="primary" id="i-ok"${fresh.length ? '' : ' disabled'}>匯入 ${fresh.length} 筆</button><button id="i-no">取消</button></div>`);
+  $('#i-no').onclick = closeSheet;
+  $('#i-ok').onclick = () => {
+    db.cats = db.cats || [];
+    const idOf = name => {
+      if (!name) return '';
+      let a = db.accounts.find(z => z.name === name);
+      if (!a) { a = { id: uid(), name, type: guessAcctType(name), last4: (name.match(/\((\d{4})\)/) || [])[1] || '', init: 0 }; db.accounts.push(a); }
+      return a.id;
+    };
+    const catKey = (name, kind) => {
+      if (!name) return kind === 'income' ? 'other_in' : 'other';
+      const m = (kind === 'income' ? INCAT_MAP : CAT_MAP)[name]; if (m) return m;
+      let c = db.cats.find(z => z.name === name && z.kind === kind);
+      if (!c) { c = { k: 'c_' + uid(), name, icon: CAT_ICON[name] || '🏷️', kind }; db.cats.push(c); }
+      return c.k;
+    };
+    let n = 0;
+    for (const i of fresh) {
+      const base = { id: uid(), t: Date.parse(i.date + 'T' + (i.time || '00:00')) || Date.now(), date: i.date, src: i.src,
+        acct: idOf(i.acct), merchant: i.merchant, note: [i.item, i.note].filter(Boolean).join('・'),
+        payer: i.who === 'Ben' ? 'ben' : i.who === 'Sarah' ? 'sarah' : '' };
+      let x;
+      if (i.t === '轉帳') x = { ...base, type: 'transfer', amount: i.amt, cat: 'transfer', toAcct: idOf(i.to) };
+      else if (i.t === '收入') x = { ...base, type: 'income', amount: i.amt, cat: catKey(i.cat, 'income') };
+      else if (i.t === '退款') x = { ...base, type: 'income', amount: i.amt, cat: 'refund', note: base.note || (i.cat ? i.cat + '退款' : '') };
+      else if (!i.cat) x = { ...base, type: 'adjust', amount: i.local, cat: 'adjust' };     // 沒分類的支出＝餘額校正
+      else x = { ...base, type: 'expense', amount: i.amt, cat: catKey(i.cat, 'expense') };
+      db.expenses.push(x); n++;
+    }
+    save(); toast(`匯入了 ${n} 筆`);
+    reconcileAccounts();
+  };
+}
+
+function reconcileAccounts() {     // 匯入後確認每個帳戶現在的實際餘額
+  openSheet(`<h3>確認帳戶餘額</h3>
+    <p class="hint">下面是照紀錄算出來的餘額。請對照 DuoPurse 或網銀，把不一樣的改成正確金額（信用卡欠款請填負數，例如 -691.84）。</p>
+    ${db.accounts.map(a => `<label>${ACCT_T[a.type].icon} ${esc(a.name)}</label><input type="number" inputmode="decimal" step="0.01" data-a="${a.id}" value="${acctBalance(a)}">`).join('')}
+    <div class="btns"><button class="primary" id="r-ok">確定</button><button id="r-skip">先不用</button></div>`);
+  $('#r-skip').onclick = () => { closeSheet(); moneyTab = 'acct'; renderMoney(); };
+  $('#r-ok').onclick = () => {
+    $('#sheet').querySelectorAll('input[data-a]').forEach(inp => {
+      const a = db.accounts.find(z => z.id === inp.dataset.a), want = parseFloat(inp.value);
+      if (a && !isNaN(want)) a.init = Math.round(((a.init || 0) + want - acctBalance(a)) * 100) / 100;
+    });
+    save(); closeSheet(); moneyTab = 'acct'; renderMoney(); toast('帳戶餘額已更新');
+  };
+}
+
+// ---------- 帳戶頁上方的小島（會動的雲、水、兩個人；顯示淨資產） ----------
+function renderIsland(net) {
+  const mon = ymd(new Date()).slice(0, 7);
+  const tx = db.expenses.filter(x => x.date.slice(0, 7) === mon);
+  const bal = tx.filter(x => txType(x) === 'income').reduce((s, x) => s + x.amount, 0) - tx.filter(x => txType(x) === 'expense').reduce((s, x) => s + x.amount, 0);
+  const status = net < 0 ? ['透支中，加油', 'bad'] : bal >= 0 ? ['穩定累積中', 'good'] : ['這個月花比賺多', 'warn'];
+  const trees = net > 10000 ? 5 : net > 3000 ? 4 : net > 0 ? 3 : 2;     // 淨資產越多，島上的樹越多
+  const T = [[118, 96], [262, 92], [300, 128], [92, 132], [228, 70]].slice(0, trees)
+    .map(([x, y]) => `<g transform="translate(${x},${y})"><g class="tree"><rect x="-2.5" y="0" width="5" height="12" rx="2" fill="#8B6B4A"/><ellipse cx="0" cy="-4" rx="11" ry="14" fill="#7FB07A"/><ellipse cx="-3" cy="-8" rx="4" ry="5" fill="#9CC896" opacity=".8"/></g></g>`).join('');
+  return `<div class="island card"><svg viewBox="0 0 380 230" role="img" aria-label="我們的小島">
+    <g class="cloud c1"><ellipse cx="60" cy="34" rx="26" ry="11" fill="#fff"/><ellipse cx="74" cy="27" rx="15" ry="11" fill="#fff"/></g>
+    <g class="cloud c2"><ellipse cx="300" cy="26" rx="30" ry="12" fill="#fff"/><ellipse cx="316" cy="18" rx="17" ry="12" fill="#fff"/></g>
+    <path d="M30 128 Q30 112 48 104 L172 48 Q190 40 208 48 L332 104 Q350 112 350 128 L350 146 Q350 160 332 168 L208 222 Q190 230 172 222 L48 168 Q30 160 30 146Z" fill="#E9D8B8"/>
+    <path d="M30 128 Q30 112 48 104 L172 48 Q190 40 208 48 L332 104 Q350 112 350 128 L350 138 Q350 152 332 160 L208 214 Q190 222 172 214 L48 160 Q30 152 30 138Z" fill="#A8C98F"/>
+    <path d="M30 122 Q30 106 48 98 L172 42 Q190 34 208 42 L332 98 Q350 106 350 122 Q350 136 332 144 L208 200 Q190 208 172 200 L48 144 Q30 136 30 122Z" fill="#C3DFA8"/>
+    <path class="water" d="M232 120 Q236 104 258 104 L300 112 Q318 118 310 134 L290 150 Q276 160 256 152 L238 140 Q228 132 232 120Z" fill="#9CC9DE"/>
+    <path class="shine" d="M250 122 h18 M262 134 h22" stroke="#E6F4FA" stroke-width="3" stroke-linecap="round"/>
+    <path d="M150 196 Q170 160 200 150 Q216 146 228 136" stroke="#EADCC0" stroke-width="14" fill="none" stroke-linecap="round"/>
+    ${T}
+    <g transform="translate(150,70)"><rect x="0" y="22" width="44" height="30" rx="4" fill="#fff" stroke="#E2CDB4" stroke-width="2"/>
+      <path d="M-6 25 Q-6 22 -3 20 L19 4 Q22 1 25 4 L47 20 Q50 22 50 25Z" fill="#A9CDF0"/><path d="M4 14 L19 4 Q22 1 25 4 L40 14Z" fill="#FBD98A"/><path d="M12 8.6 L19 4 Q22 1 25 4 L32 8.6Z" fill="#F7B6C8"/>
+      <rect x="17" y="34" width="10" height="18" rx="2" fill="#F7B6C8"/><rect x="5" y="30" width="8" height="8" rx="2" fill="#A9CDF0"/><rect x="31" y="30" width="8" height="8" rx="2" fill="#FBD98A"/></g>
+    <image class="bob b1" href="icons/boy.svg" x="164" y="128" width="30" height="30"/>
+    <image class="bob b2" href="icons/girl.svg" x="194" y="130" width="30" height="30"/>
+  </svg>
+  <div class="isl-net"><span>我們的淨資產</span><b class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</b><em class="${status[1]}">${status[0]}</em></div></div>`;
 }
 
 // ====================================================================
@@ -1006,11 +1154,13 @@ function bindMoneyStock() {
   $('#money-prev').onclick = () => { const [y, m] = moneyMonth.split('-').map(Number); moneyMonth = ymd(new Date(y, m - 2, 1)).slice(0, 7); renderMoney(); };
   $('#money-next').onclick = () => { const [y, m] = moneyMonth.split('-').map(Number); moneyMonth = ymd(new Date(y, m, 1)).slice(0, 7); renderMoney(); };
   $('#money-add').onclick = () => openExpense(null);
-  $('#money-list').onclick = e => { const b = e.target.closest('.xrow'); if (b) openExpense(db.expenses.find(x => x.id === b.dataset.id)); };
+  $('#money-list').onclick = e => { const b = e.target.closest('.xrow'); if (!b) return; const x = db.expenses.find(z => z.id === b.dataset.id); if (!x) return;
+    if (txType(x) === 'adjust') openAdjust(x); else openExpense(x); };
   document.querySelectorAll('.mntabs button').forEach(b => b.onclick = () => { moneyTab = b.dataset.tab; renderMoney(); });
   document.querySelectorAll('.st-kind button').forEach(b => b.onclick = () => { statKind = b.dataset.k; renderMoney(); });
   document.querySelectorAll('.st-by button').forEach(b => b.onclick = () => { statBy = b.dataset.b; renderMoney(); });
   $('#money-acct').onclick = e => { const b = e.target.closest('.arow'); if (b) openAccount(db.accounts.find(a => a.id === b.dataset.id)); };
+  $('#csv-file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) f.text().then(importCSV); };
   document.querySelectorAll('.stabs button').forEach(b => b.onclick = () => { stockTab = b.dataset.tab; renderStock(); });
   $('#stock-add').onclick = () => openStock(null);
   $('#stock-list').onclick = e => {
