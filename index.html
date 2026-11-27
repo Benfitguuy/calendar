@@ -81,30 +81,6 @@
     </main>
   </div>
 
-  <!-- 頁面三：記帳 -->
-  <div id="page-money" class="page" hidden>
-    <header>
-      <div class="top">
-        <h1 id="money-title"></h1>
-        <div class="top-btns">
-          <span id="money-monthnav"><button id="money-prev" class="arrow" aria-label="上個月">‹</button><button id="money-next" class="arrow" aria-label="下個月">›</button></span>
-          <button id="money-add" class="round" aria-label="記一筆">＋</button>
-        </div>
-      </div>
-    </header>
-    <div class="mtabs mntabs mt3"><button data-tab="acct">帳戶</button><button data-tab="stat">統計</button><button data-tab="list">明細</button></div>
-    <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
-    <main class="mscroll">
-      <div id="money-list"></div>
-      <div id="money-stat" hidden>
-        <div class="mtabs st-kind"><button data-k="expense">支出</button><button data-k="income">收入</button></div>
-        <div class="mtabs st-by"><button data-b="cat">依分類</button><button data-b="acct">依帳戶</button></div>
-        <div id="money-stat-body"></div>
-      </div>
-      <div id="money-acct" hidden></div>
-    </main>
-  </div>
-
   <!-- 頁面四：庫存＋採買清單 -->
   <div id="page-stock" class="page" hidden>
     <header>
@@ -127,7 +103,6 @@
   <nav id="tabs">
     <button data-page="day" class="on"><span class="tico">◷</span>今天</button>
     <button data-page="month"><span class="tico">▦</span>月曆</button>
-    <button data-page="money"><span class="tico">＄</span>記帳</button>
     <button data-page="stock"><span class="tico">☰</span>庫存</button>
   </nav>
 </div>
