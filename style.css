@@ -256,8 +256,8 @@ h1,h3,.ev b,.sum-top b,.xrow b{font-weight:800}
 body,#app{background:var(--bg);transition:background .25s}
 body.th-day{--bg:#E2EEFA;--card:#F8FBFF;--line:#CFE0F2;--line2:#E6F0FA;--soft:#D3E5F7;--muted:#8496AA;--hi:#E3EEFB;--hi-bd:#7FAEE0}
 body.th-month{--bg:#FBE3EA;--card:#FFF6F8;--line:#F0D2DA;--line2:#F8E6EB;--soft:#F5CFDA;--muted:#A58D94;--hi:#FCE0E7;--hi-bd:#EE7F9C}
-body.th-money{--bg:#FFF1D2;--card:#FFFBF1;--line:#F2DFB4;--line2:#FAEED2;--soft:#FBE5B4;--muted:#A8956E;--hi:#FFF0C9;--hi-bd:#E8B44C}
-body.th-stock{--bg:#DCF2E7;--card:#F6FCF9;--line:#C5E6D5;--line2:#E1F3EA;--soft:#C7EBD9;--muted:#7FA391;--hi:#D7F2E4;--hi-bd:#5DBB8E}
+body.th-money{--bg:#E4EEE4;--card:#F8FBF7;--line:#CFE0CF;--line2:#E6F0E6;--soft:#D5E5D3;--muted:#7C917D;--hi:#DCEBDA;--hi-bd:#6B8F71}
+body.th-stock{--bg:#ECE6F7;--card:#FAF8FE;--line:#DCD3EE;--line2:#EEE9F8;--soft:#E0D7F3;--muted:#8E84A6;--hi:#E7E0F7;--hi-bd:#9B86D9}
 #tabs button.on{color:var(--text)}
 #tabs button.on .tico{background:var(--soft);border-radius:12px;padding:0 14px}
 .mframe{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:10px 6px 6px;box-shadow:0 2px 0 var(--line)}
@@ -288,3 +288,24 @@ body.th-stock{--bg:#DCF2E7;--card:#F6FCF9;--line:#C5E6D5;--line2:#E1F3EA;--soft:
 .xrow small{background:var(--soft)}
 #x-payer button.on{border-color:var(--hi-bd)}
 optgroup{font-weight:700}
+.ttype button.on,#a-type button.on{background:var(--hi);border-color:var(--hi-bd);font-weight:800}
+
+/* v0.15 記帳綠色系＋小島 */
+body.th-money .round,body.th-money .btns .primary{background:#5E7F63;color:#fff}
+body.th-money .pos{color:#4E7F55}
+.island{padding:6px 6px 14px;background:linear-gradient(#DDEBDD,#F8FBF7);overflow:hidden}
+.island svg{display:block;width:100%;height:auto}
+.cloud{animation:drift 26s linear infinite} .cloud.c2{animation-duration:34s;animation-delay:-12s}
+@keyframes drift{from{transform:translateX(-90px)}to{transform:translateX(400px)}}
+.water{animation:shimmer 4s ease-in-out infinite} @keyframes shimmer{50%{fill:#B3D8E8}}
+.shine{animation:shine 3s ease-in-out infinite} @keyframes shine{50%{opacity:.2}}
+.bob{animation:bob 2.4s ease-in-out infinite} .bob.b2{animation-delay:-1.2s}
+@keyframes bob{50%{transform:translateY(-3px)}}
+.tree{animation:sway 5s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom}
+@keyframes sway{50%{transform:rotate(2deg)}}
+.isl-net{text-align:center;margin-top:2px}
+.isl-net span{display:block;font-size:13px;color:var(--muted)}
+.isl-net b{display:block;font-size:30px;font-weight:800}
+.isl-net em{display:inline-block;font-style:normal;font-size:13px;padding:3px 12px;border-radius:999px;margin-top:4px;background:#DCEBDA;color:#4E7F55}
+.isl-net em.warn{background:#FFF0C9;color:#9A6B12} .isl-net em.bad{background:#FBE0E0;color:#B04A4A}
+.xrow.adj{opacity:.7} .xrow.future{opacity:.55}
