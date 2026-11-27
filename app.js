@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -118,7 +118,7 @@ function renderEvents() {
     else { const base = o === 'ben' ? 0 : 50; width = 50 / it.n; left = base + it.lane * width; }
     const icon = /起床/.test(it.ev.title) ? '☀︎ ' : /就寢|睡/.test(it.ev.title) ? '☾ ' : o === 'both' ? '♥ ' : o === 'work' ? '💼 ' : '';
     h += `<div class="ev ${o}" data-id="${it.ev.id}" style="top:${top + 1}px;height:${ht}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px)">
-      <b>${it.ev.end ? '' : `<span class="st">${it.ev.start}</span> `}${icon}${esc(it.ev.title)}</b>${it.ev.end && ht >= 36 ? `<small>${it.ev.start}–${it.ev.end}${it.ev.repeat !== 'none' ? ' · ↻' + REPEAT[it.ev.repeat] : ''}</small>` : ''}</div>`;
+      <b>${it.ev.end ? '' : `<span class="st">${it.ev.start}</span> `}${icon}${esc(it.ev.title)}</b>${it.ev.end && ht >= 36 ? `<small>${it.ev.start}–${it.ev.end}${it.ev.repeat !== 'none' ? ' · ↻' + REPEAT[it.ev.repeat] : ''}</small>` : ''}${it.ev.note && ht >= 52 ? `<small class="note">📝 ${esc(it.ev.note)}</small>` : ''}</div>`;
   }
   if (sel === ymd(new Date())) {
     const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
@@ -166,6 +166,10 @@ function openEvent(e, preset = {}) {
   const v = e || { title: '', owner: preset.owner || 'sarah', date: sel, start: preset.start || '09:00',
     end: preset.end || '', repeat: 'none' };
   const rep = v.repeat !== 'none';
+  // 結束時間：無／15 分／30 分／1 小時／自選
+  const dur = v.end ? toMin(v.end) - toMin(v.start) : 0;
+  const endSel = !v.end ? 'none' : [15, 30, 60].includes(dur) ? String(dur) : 'custom';
+  const END_OPTS = [['none', '無'], ['15', '15 分鐘'], ['30', '30 分鐘'], ['60', '1 小時'], ['custom', '自選時間']];
   openSheet(`
     <h3>${isNew ? '新增行程' : '編輯行程'}</h3>
     <label>要做什麼？</label><input id="f-title" value="${esc(v.title)}" placeholder="例如：看牙醫">
@@ -173,11 +177,13 @@ function openEvent(e, preset = {}) {
     <label>${rep ? '從哪一天開始' : '日期'}</label><input id="f-date" type="date" value="${v.date}">
     <div class="row2">
       <div><label>開始</label><input id="f-start" type="time" step="300" value="${v.start}"></div>
-      <div><label>結束 <span class="opt-tag">可以不填</span><button type="button" id="f-endclear" class="mini-link"${v.end ? '' : ' hidden'}>清除</button></label>
-        <input id="f-end" type="time" step="300" value="${v.end || ''}"></div>
+      <div><label>結束</label>
+        <select id="f-endsel">${END_OPTS.map(([k, t]) => `<option value="${k}"${k === endSel ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
     </div>
+    <div id="f-endbox"${endSel === 'custom' ? '' : ' hidden'}><label>結束時間</label><input id="f-end" type="time" step="300" value="${v.end || toTime(toMin(v.start) + 90)}"></div>
     <label>重複</label>
     <select id="f-repeat">${Object.entries(REPEAT).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    <label>備註</label><input id="f-note" value="${esc(v.note || '')}" placeholder="例如：記得帶健保卡、地址">
     ${!isNew && rep ? '<p class="hint">這是重複的行程，修改會套用到每一天。</p>' : ''}
     <p class="err" id="f-err"></p>
     <div class="btns" id="f-btns">
@@ -188,16 +194,22 @@ function openEvent(e, preset = {}) {
   bindSeg();
   if (isNew) setTimeout(() => $('#f-title').focus(), 50);
   $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('input', () => $('#f-err').textContent = ''));
-  $('#f-end').addEventListener('input', () => $('#f-endclear').hidden = !$('#f-end').value);
-  $('#f-endclear').onclick = () => { $('#f-end').value = ''; $('#f-endclear').hidden = true; $('#f-err').textContent = ''; };
+  $('#f-endsel').onchange = () => { $('#f-endbox').hidden = $('#f-endsel').value !== 'custom'; $('#f-err').textContent = ''; };
   $('#f-cancel').onclick = closeSheet;
   $('#f-save').onclick = () => {
-    const noEnd = !$('#f-end').value;          // 沒填結束時間＝只記開始
-    const title = $('#f-title').value.trim(), start = $('#f-start').value, end = noEnd ? '' : $('#f-end').value, date = $('#f-date').value;
+    const title = $('#f-title').value.trim(), start = $('#f-start').value, date = $('#f-date').value, es = $('#f-endsel').value;
     if (!title) return $('#f-err').textContent = '請先寫要做什麼';
-    if (!date || !start || (!noEnd && !end)) return $('#f-err').textContent = '日期和時間都要填';
-    if (!noEnd && toMin(end) <= toMin(start)) return $('#f-err').textContent = '結束時間要比開始晚';
-    const data = { title, owner: segValue(), date, start, end, repeat: $('#f-repeat').value };
+    if (!date || !start) return $('#f-err').textContent = '日期和開始時間都要填';
+    let end = '';                                     // 「無」＝只記開始時間
+    if (es === 'custom') {
+      end = $('#f-end').value;
+      if (!end || toMin(end) <= toMin(start)) return $('#f-err').textContent = '結束時間要比開始晚';
+    } else if (es !== 'none') {
+      const m = toMin(start) + Number(es);
+      if (m > 1439) return $('#f-err').textContent = '超過半夜 12 點了，請改用「自選時間」';
+      end = toTime(m);
+    }
+    const data = { title, owner: segValue(), date, start, end, repeat: $('#f-repeat').value, note: $('#f-note').value.trim() };
     if (isNew) db.events.push({ id: uid(), ex: [], ...data }); else Object.assign(e, data);
     save(); closeSheet(); renderEvents(); toast('已儲存');
   };
@@ -546,7 +558,7 @@ function openDay(day) {
   let html = `<h3>${d.getMonth() + 1}月${d.getDate()}日（${WEEK[d.getDay()]}）</h3>`;
   if (mMode === 'events') {
     html += `<div class="evlist">${evs.length ? evs.map(e => `<button class="evrow ${e.owner}" data-goto="1">
-      <span>${e.start}${e.end ? '–' + e.end : ''}</span>${esc(e.title)}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
+      <span>${e.start}${e.end ? '–' + e.end : ''}</span>${esc(e.title)}${e.note ? `<em class="evnote">📝 ${esc(e.note)}</em>` : ''}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
       <div class="btns"><button class="primary" id="d-add">在這天新增行程</button><button id="d-goto">打開這天的時間軸</button><button id="p-close">關閉</button></div>`;
     openSheet(html);
     $('#sheet').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => goDay(day));
