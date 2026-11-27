@@ -145,3 +145,18 @@ h1{font-size:24px;margin:0;font-weight:700;letter-spacing:.5px}
 .opts{display:flex;gap:6px}
 .opts button{flex:1;padding:9px 0;border-radius:12px;background:var(--soft);border:2px solid transparent;font-size:15px}
 .opts button.on{background:#FCE0E7;border-color:#EE7F9C;color:#5E1A2E;font-weight:600}
+
+.ev .st{font-weight:500;opacity:.75;font-size:12px}
+label.check{display:flex !important;align-items:center;gap:8px;color:var(--text) !important;font-size:15px !important}
+#sheet label.check input{width:22px;height:22px;-webkit-appearance:checkbox;appearance:checkbox;margin:0;accent-color:var(--text)}
+#f-endbox[hidden]{display:none}
+#cycle-card[hidden]{display:none}
+.mtabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 12px 10px;background:var(--soft);border-radius:12px;padding:3px}
+.mtabs button{padding:8px 0;border-radius:10px;font-size:15px;color:var(--muted)}
+.mtabs button.on{background:var(--card);color:var(--text);font-weight:600}
+#mgrid.evmode .mday{height:84px;padding:4px 2px;gap:2px;justify-content:flex-start}
+#mgrid.evmode .num{height:22px;line-height:18px;width:22px;font-size:13px;flex-shrink:0}
+.mini{display:block;width:100%;font-size:10px;line-height:14px;border-radius:4px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:clip;text-align:left}
+.mini.ben{background:var(--ben-bg);color:var(--ben-fg)} .mini.sarah{background:var(--sarah-bg);color:var(--sarah-fg)}
+.mini.both{background:var(--both-bg);color:var(--both-fg)} .mini.work{background:var(--work-bg);color:var(--work-fg)}
+.more{font-size:10px;color:var(--muted);line-height:12px}
