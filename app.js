@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.11.0';
+const APP_VERSION = '0.12.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -673,6 +673,9 @@ function openDay(day, edit = false) {
 // ---------- 切換頁面 ----------
 function showPage(name) {
   ['day', 'month', 'money', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
+  document.body.className = 'th-' + name;                      // 每個分頁不同顏色
+  const tc = { day: '#E2EEFA', month: '#FBE3EA', money: '#FFF1D2', stock: '#DCF2E7' }[name];
+  document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
   if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
   else if (name === 'money') renderMoney();
