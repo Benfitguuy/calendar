@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.7.1';
+const APP_VERSION = '0.8.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -452,6 +452,7 @@ const MOOD = ['😄', '🙂', '😐', '😣', '😢'];
 const SYMPTOMS = ['肚子痛', '腰痠', '頭痛', '胸部脹痛', '長痘痘', '疲倦', '脹氣', '情緒起伏'];
 const DISCHARGE = ['乾乾的', '黏稠', '乳白色', '蛋白狀（拉絲）', '水水的', '顏色或味道怪怪的'];
 const SEX = ['沒有', '有（有避孕）', '有（沒避孕）'];
+const POOP = ['沒有大', '正常', '偏硬／便秘', '偏軟', '拉肚子'];
 
 function cycleStats() {
   const starts = pv.periods.map(p => p.start).sort();
@@ -559,6 +560,7 @@ function openDay(day) {
   const multi = (key, arr) => `<div class="opts wrap">${arr.map((t, i) => `<button class="${(log[key] || []).includes(i) ? 'on' : ''}" data-m="${key}" data-i="${i}">${t}</button>`).join('')}</div>`;
   const body = `<label>症狀（可以選很多個）</label>${multi('sym', SYMPTOMS)}
       <label>分泌物</label>${opt('dis', DISCHARGE, 'wrap')}
+      <label>大便</label>${opt('poop', POOP, 'wrap')}
       <label>性行為</label>${opt('sex', SEX, 'wrap')}
       <label>心情</label>${opt('mood', MOOD)}
       <label>備註</label><input id="p-note" value="${esc(log.note || '')}" placeholder="例如：想吃甜的、睡不好">`;
