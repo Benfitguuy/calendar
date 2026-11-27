@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.10.0';
 const NO_END_MINS = 30;                // 沒有結束時間的行程，時間軸上畫 30 分鐘高
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: '<img class="av" src="icons/boy.svg" alt="">Ben', sarah: '<img class="av" src="icons/girl.svg" alt="">Sarah', both: '♥ 一起', work: '💼 公事' };
@@ -9,6 +9,8 @@ const OWNERS = ['ben', 'sarah', 'both', 'work'];
 const isShared = o => o === 'both' || o === 'work';   // 橫跨兩欄的行程
 const REPEAT = { none: '不重複', daily: '每天', weekdays: '平日（週一到五）', weekly: '每週同一天' };
 const WEEK = '日一二三四五六';
+const WEEK_MON = '一二三四五六日';           // 一週從星期一開始
+const monOffset = d => (d.getDay() + 6) % 7;   // 星期一＝0 … 星期日＝6
 
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2, '0');
@@ -74,12 +76,12 @@ function render() { renderHeader(); renderEvents(); renderTray(); }
 function renderHeader() {
   const d = parseYmd(sel);
   $('#month').textContent = `${d.getFullYear()}年${d.getMonth() + 1}月`;
-  const sun = addDays(sel, -d.getDay()), today = ymd(new Date());
+  const sun = addDays(sel, -monOffset(d)), today = ymd(new Date());
   let h = '';
   for (let i = 0; i < 7; i++) {
     const day = addDays(sun, i);
     h += `<button class="day${day === sel ? ' sel' : ''}${day === today ? ' today' : ''}" data-day="${day}">
-      <span class="w">${WEEK[i]}</span><span class="n">${parseYmd(day).getDate()}</span></button>`;
+      <span class="w">${WEEK_MON[i]}</span><span class="n">${parseYmd(day).getDate()}</span></button>`;
   }
   $('#days').innerHTML = h;
 }
@@ -130,7 +132,7 @@ function renderEvents() {
 function renderTray() {
   $('#tcount').textContent = db.todos.length ? `（${db.todos.length}）` : '';
   $('#chips').innerHTML = db.todos.length
-    ? db.todos.map(t => `<div class="chip ${t.owner}" data-id="${t.id}">${esc(t.title)}<small>${durLabel(t.mins)}</small></div>`).join('')
+    ? db.todos.map(t => `<div class="chip ${t.owner}" data-id="${t.id}">${esc(t.title)}${t.mins ? `<small>${durLabel(t.mins)}</small>` : ''}</div>`).join('')
     : '<p class="empty">目前沒有待安排的事，按「＋ 新增」加一個吧</p>';
 }
 
@@ -215,8 +217,8 @@ function openEvent(e, preset = {}) {
   };
   if (isNew) return;
   $('#f-back').onclick = () => {
-    const mins = e.end ? Math.max(15, toMin(e.end) - toMin(e.start)) : NO_END_MINS;
-    db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins });
+    const mins = e.end ? Math.max(15, toMin(e.end) - toMin(e.start)) : 0;
+    db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins, note: e.note || '' });
     removeEvent(e, rep ? 'one' : 'all');
     toast('已移回待安排');
   };
@@ -238,16 +240,23 @@ function removeEvent(e, mode) {
 
 // ---------- 新增／編輯待辦 ----------
 function openTodo(t) {
+  // 跟「新增行程」同一個樣子；日期和開始時間可以不填（不填＝留在待安排）
   const isNew = !t;
-  const v = t || { title: '', owner: 'sarah', mins: 60 };
-  const opts = [15, 30, 45, 60, 90, 120, 180];
+  const v = t || { title: '', owner: 'sarah', mins: 60, note: '' };
+  const opts = [0, 15, 30, 60, 90, 120, 180];
   if (!opts.includes(v.mins)) opts.push(v.mins), opts.sort((a, b) => a - b);
   openSheet(`
     <h3>${isNew ? '新增待安排' : '編輯待安排'}</h3>
     <label>要做什麼？</label><input id="t-title" value="${esc(v.title)}" placeholder="例如：寄包裹">
     <label>是誰的？</label>${segHtml(v.owner)}
-    <label>大概要多久？</label>
-    <select id="t-mins">${opts.map(m => `<option value="${m}"${m === v.mins ? ' selected' : ''}>${durLabel(m)}</option>`).join('')}</select>
+    <label>日期 <span class="opt-tag">還沒決定可以不填</span></label><input id="t-date" type="date" value="">
+    <div class="row2">
+      <div><label>開始 <span class="opt-tag">可不填</span></label><input id="t-start" type="time" step="300" value=""></div>
+      <div><label>大概要多久</label>
+        <select id="t-mins">${opts.map(m => `<option value="${m}"${m === v.mins ? ' selected' : ''}>${m ? durLabel(m) : '無'}</option>`).join('')}</select></div>
+    </div>
+    <label>備註</label><input id="t-note" value="${esc(v.note || '')}" placeholder="例如：郵局 5 點關門">
+    <p class="hint">日期和開始時間都填了，就會直接排進行事曆；沒填就留在下面的「待安排」，之後再拖進去。</p>
     <p class="err" id="t-err"></p>
     <div class="btns">
       <button class="primary" id="t-save">儲存</button>
@@ -256,12 +265,22 @@ function openTodo(t) {
     </div>`);
   bindSeg();
   if (isNew) setTimeout(() => $('#t-title').focus(), 50);
-  $('#t-title').addEventListener('input', () => $('#t-err').textContent = '');
+  $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('input', () => $('#t-err').textContent = ''));
   $('#t-cancel').onclick = closeSheet;
   $('#t-save').onclick = () => {
-    const title = $('#t-title').value.trim();
+    const title = $('#t-title').value.trim(), date = $('#t-date').value, start = $('#t-start').value;
     if (!title) return $('#t-err').textContent = '請先寫要做什麼';
-    const data = { title, owner: segValue(), mins: Number($('#t-mins').value) };
+    if (!!date !== !!start) return $('#t-err').textContent = '日期和開始時間要一起填，或都不填';
+    const data = { title, owner: segValue(), mins: Number($('#t-mins').value), note: $('#t-note').value.trim() };
+    if (date) {                                        // 直接排進行事曆
+      const s0 = toMin(start);
+      if (data.mins && s0 + data.mins > 1439) return $('#t-err').textContent = '超過半夜 12 點了，請改短一點';
+      db.events.push({ id: uid(), title, owner: data.owner, date, start, end: data.mins ? toTime(s0 + data.mins) : '',
+        repeat: 'none', ex: [], note: data.note });
+      if (!isNew) db.todos = db.todos.filter(x => x !== t);
+      save(); closeSheet(); sel = date; render(); toast(`已排進 ${md(date)} ${start}`);
+      return;
+    }
     if (isNew) db.todos.push({ id: uid(), ...data }); else Object.assign(t, data);
     save(); closeSheet(); renderTray(); toast('已儲存');
   };
@@ -302,7 +321,7 @@ function updateDrop() {
   const sc = $('#scroller').getBoundingClientRect(), box = $('#events'), br = box.getBoundingClientRect(), pv = PV;
   const inside = drag.y >= sc.top && drag.y <= sc.bottom && drag.x >= sc.left && drag.x <= sc.right;
   if (!inside) { drag.drop = null; pv.hidden = true; return; }
-  const mins = drag.t.mins;
+  const mins = drag.t.mins || NO_END_MINS;
   let start = Math.round(((drag.y - br.top) / HOUR * 60 - 15) / 15) * 15;
   start = Math.max(0, Math.min(1440 - mins, start));
   drag.drop = start;
@@ -311,7 +330,7 @@ function updateDrop() {
   pv.hidden = false;
   pv.className = '';
   pv.style.cssText = `top:${start / 60 * HOUR}px;height:${Math.max(24, mins / 60 * HOUR)}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px);border-color:var(--${o}-bd);color:var(--${o}-fg)`;
-  pv.textContent = `${toTime(start)}–${toTime(start + mins)}`;
+  pv.textContent = drag.t.mins ? `${toTime(start)}–${toTime(start + mins)}` : toTime(start);
 }
 function onChipUp() {
   if (!drag) return;
@@ -322,7 +341,7 @@ function onChipUp() {
   PV.hidden = true; document.body.appendChild(PV);
   if (d.drop == null) return;
   db.events.push({ id: uid(), title: d.t.title, owner: d.t.owner, date: sel,
-    start: toTime(d.drop), end: toTime(Math.min(1439, d.drop + d.t.mins)), repeat: 'none', ex: [] });
+    start: toTime(d.drop), end: d.t.mins ? toTime(Math.min(1439, d.drop + d.t.mins)) : '', repeat: 'none', ex: [], note: d.t.note || '' });
   db.todos = db.todos.filter(x => x !== d.t);
   save(); render(); toast(`已排進 ${toTime(d.drop)}`);
 }
@@ -516,14 +535,14 @@ function renderMonth() {
   const [y, m] = mCur.split('-').map(Number);
   $('#m-title').textContent = `${y}年${m}月`;
   const first = new Date(y, m - 1, 1), daysIn = new Date(y, m, 0).getDate();
-  const start = addDays(ymd(first), -first.getDay()), cells = Math.ceil((first.getDay() + daysIn) / 7) * 7;
+  const start = addDays(ymd(first), -monOffset(first)), cells = Math.ceil((monOffset(first) + daysIn) / 7) * 7;
   const st = cycleStats(), preds = predictions(st), today = ymd(new Date()), evMode = mMode === 'events';
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
   $('#mgrid').classList.toggle('evmode', evMode);
   $('#legend').innerHTML = evMode
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
-    : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>✎ 有記錄狀況</span>';
+    : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>💧量</span><span>🤕症狀</span><span>🫧分泌物</span><span>💩大便</span><span>❤️親密</span><span>📝備註</span>';
   $('#m-hint').textContent = evMode
     ? '左右滑可以換月份。點一下日期看那天的行程；每天、平日重複的行程（例如起床）不會顯示在月曆上。'
     : '左右滑可以換月份。點一下日期記錄經期和身體狀況；這些紀錄只存在這支手機，不會給別人看到。';
@@ -544,13 +563,24 @@ function renderMonth() {
       const pd = periodOn(day, st);
       if (pd && (pd.end || day <= today)) cls.push('period');            // 還沒結束的經期，未來的日子用「預測」樣式
       else if (pd || predictedOn(day, preds, st)) cls.push('predict');
-      if (pv.logs[day] && Object.keys(pv.logs[day]).length) inner = '<span class="logmark">✎</span>';
+      if (pv.logs[day]) inner = logIcons(pv.logs[day]);
     }
     h += `<button class="${cls.join(' ')}" data-day="${day}"><span class="num">${parseYmd(day).getDate()}</span>${inner}</button>`;
   }
   $('#mgrid').innerHTML = h;
 }
 
+function logIcons(l) {                        // 月曆日期下面的小圖示：有記錄哪些狀況
+  const ic = [];
+  if (l.mood != null) ic.push(MOOD[l.mood]);
+  if (l.flow != null) ic.push('💧');
+  if (l.pain > 0 || (l.sym && l.sym.length)) ic.push('🤕');
+  if (l.dis != null) ic.push('🫧');
+  if (l.poop != null) ic.push('💩');
+  if (l.sex > 0) ic.push('❤️');
+  if (l.note) ic.push('📝');
+  return ic.length ? `<span class="licons">${ic.slice(0, 4).join('')}${ic.length > 4 ? '…' : ''}</span>` : '';
+}
 function openDay(day) {
   const st = cycleStats(), today = ymd(new Date()), p = periodOn(day, st);
   const evs = db.events.filter(e => occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
