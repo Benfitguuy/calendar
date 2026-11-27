@@ -1,7 +1,7 @@
 'use strict';
 // 我們的行事曆（Sarah & Ben）— 試用版：資料只存在這支手機（localStorage）
 // 之後接雲端同步時，只要換掉 Store 這一段。
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 const HOUR = 60;                       // 每小時高度（px），要跟 style.css 的 --hour 一致
 const NAMES = { ben: 'Ben', sarah: 'Sarah', both: '兩人一起' };
 const REPEAT = { none: '不重複', daily: '每天', weekdays: '平日（週一到五）', weekly: '每週同一天' };
@@ -311,6 +311,7 @@ function bind() {
   $('#add').onclick = () => openEvent(null);
   $('#addtodo').onclick = () => openTodo(null);
   $('#events').addEventListener('click', e => {
+    if (Date.now() < suppressClickUntil) return;
     const evEl = e.target.closest('.ev');
     if (evEl) { const ev = db.events.find(x => x.id === evEl.dataset.id); if (ev) openEvent(ev); return; }
     const r = $('#events').getBoundingClientRect();
@@ -325,9 +326,95 @@ function bind() {
   chips.addEventListener('pointerup', onChipUp);
   chips.addEventListener('pointercancel', onChipUp);
   // 每分鐘更新「現在」那條線；回到 App 時也更新
-  setInterval(() => { if (!drag && sel === ymd(new Date())) renderEvents(); }, 60000);
+  setInterval(() => { if (!drag && !mv && sel === ymd(new Date())) renderEvents(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) renderEvents(); });
 }
 
-buildHours(); bind(); render(); scrollToNow();
+// ---------- 久按行程 → 拖到別的時間 ----------
+// 手指按住不動約 0.4 秒，行程會「浮起來」，這時可以上下移動；放開就改到新時間。
+// 按住前就開始滑動 → 當作一般捲動，不會移動行程。
+let mv = null, suppressClickUntil = 0;
+const HOLD_MS = 400;
+function evStart(x, y, el) {
+  const e = db.events.find(v => v.id === el.dataset.id); if (!e) return;
+  mv = { e, el, x0: x, y0: y, y, active: false, raf: 0,
+    s0: toMin(e.start), dur: Math.max(15, toMin(e.end) - toMin(e.start)), newStart: null,
+    timer: setTimeout(() => liftEvent(), HOLD_MS) };
+}
+function liftEvent() {
+  if (!mv) return;
+  mv.active = true; mv.newStart = mv.s0;
+  mv.el.classList.add('moving');
+  mv.label = document.createElement('div'); mv.label.className = 'move-label'; mv.el.appendChild(mv.label);
+  updateMove(); mv.raf = requestAnimationFrame(moveLoop);
+}
+function evMove(x, y) {
+  if (!mv) return false;
+  mv.y = y;
+  if (!mv.active) {
+    if (Math.hypot(x - mv.x0, y - mv.y0) > 8) { clearTimeout(mv.timer); mv = null; }   // 是在捲動
+    return false;
+  }
+  updateMove(); return true;
+}
+function updateMove() {
+  const scTop = $('#scroller').scrollTop;
+  if (mv.scroll0 == null) mv.scroll0 = scTop;
+  const delta = (mv.y - mv.y0 + (scTop - mv.scroll0)) / HOUR * 60;
+  let s = Math.round((mv.s0 + delta) / 15) * 15;
+  s = Math.max(0, Math.min(1440 - mv.dur, s));
+  mv.newStart = s;
+  mv.el.style.top = (s / 60 * HOUR + 1) + 'px';
+  mv.label.textContent = `${toTime(s)}–${toTime(Math.min(1439, s + mv.dur))}`;
+}
+function moveLoop() {
+  if (!mv || !mv.active) return;
+  const r = $('#scroller').getBoundingClientRect(), sc = $('#scroller');
+  if (mv.y < r.top + 50) { sc.scrollTop -= 8; updateMove(); }
+  else if (mv.y > r.bottom - 50) { sc.scrollTop += 8; updateMove(); }
+  mv.raf = requestAnimationFrame(moveLoop);
+}
+function evEnd() {
+  if (!mv) return;
+  const m = mv; mv = null;
+  clearTimeout(m.timer); cancelAnimationFrame(m.raf);
+  if (!m.active) return;                       // 只是點一下 → 交給 click 開編輯
+  suppressClickUntil = Date.now() + 400;
+  const s = m.newStart, start = toTime(s), end = toTime(Math.min(1439, s + m.dur)), e = m.e;
+  if (s === m.s0) { renderEvents(); return; }
+  if (e.repeat === 'none') {
+    e.start = start; e.end = end; save(); renderEvents(); toast(`已改到 ${start}`); return;
+  }
+  openSheet(`<h3>改時間</h3><p class="hint">「${esc(e.title)}」是重複的行程，要改哪些？</p>
+    <div class="btns"><button class="primary" id="m-one">只改 ${parseYmd(sel).getMonth() + 1}/${parseYmd(sel).getDate()} 這一天</button>
+    <button id="m-all">每一天都改成 ${start}</button><button id="m-no">取消</button></div>`);
+  $('#m-one').onclick = () => {
+    (e.ex = e.ex || []).push(sel);
+    db.events.push({ id: uid(), title: e.title, owner: e.owner, date: sel, start, end, repeat: 'none', ex: [] });
+    save(); closeSheet(); renderEvents(); toast(`已改到 ${start}`);
+  };
+  $('#m-all').onclick = () => { e.start = start; e.end = end; save(); closeSheet(); renderEvents(); toast('每一天都改好了'); };
+  $('#m-no').onclick = () => { closeSheet(); renderEvents(); };
+}
+function bindMove() {
+  const box = $('#events');
+  // 手機（觸控）
+  box.addEventListener('touchstart', ev => {
+    const el = ev.target.closest('.ev'); if (!el || ev.touches.length > 1) return;
+    const t = ev.touches[0]; evStart(t.clientX, t.clientY, el);
+  }, { passive: true });
+  box.addEventListener('touchmove', ev => {
+    const t = ev.touches[0];
+    if (evMove(t.clientX, t.clientY)) ev.preventDefault();      // 行程浮起來時，不要讓畫面捲動
+  }, { passive: false });
+  box.addEventListener('touchend', evEnd);
+  box.addEventListener('touchcancel', evEnd);
+  box.addEventListener('contextmenu', ev => { if (ev.target.closest('.ev')) ev.preventDefault(); });
+  // 電腦（滑鼠）
+  box.addEventListener('mousedown', ev => { const el = ev.target.closest('.ev'); if (el) evStart(ev.clientX, ev.clientY, el); });
+  window.addEventListener('mousemove', ev => { if (mv) evMove(ev.clientX, ev.clientY); });
+  window.addEventListener('mouseup', evEnd);
+}
+
+buildHours(); bind(); bindMove(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
