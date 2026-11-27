@@ -9,7 +9,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
-  font-family:"Iansui",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;overscroll-behavior:none}
+  font-family:"Chiron GoRound TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;overscroll-behavior:none}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 #app{height:100vh;height:100dvh;display:flex;flex-direction:column}
 
@@ -236,3 +236,11 @@ input,select,button{font-family:inherit}
 .opt-tag{font-size:11px;background:var(--soft);border-radius:6px;padding:1px 6px;margin-left:4px}
 .mini-link{float:right;font-size:13px;color:var(--both-bd);padding:0 2px}
 .mini-link[hidden]{display:none}
+
+/* v0.9 字體：甜圓體（粗） */
+body{font-weight:700}
+h1,h3,.ev b,.sum-top b,.xrow b{font-weight:800}
+.hint,.tray-hint,.empty,label,small,.mweek span,.hr span{font-weight:600}
+#f-endbox[hidden]{display:none}
+.ev small.note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evnote{display:block;font-style:normal;font-size:13px;opacity:.8;margin-top:2px}
