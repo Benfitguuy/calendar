@@ -361,3 +361,32 @@ body.th-money .pos{color:#4E7F55}
 .mini.evg{opacity:.55;text-decoration:line-through}
 .evrow.evg{opacity:.7;border-style:dashed}
 .ghostinfo{font-size:15px;line-height:1.7;background:#fff;border-radius:12px;padding:10px 12px;margin:6px 0}
+
+/* v0.23 房子變大、小泡泡、清單變精簡 */
+.house{position:relative;margin:2px -6px 6px}
+.hs-ov{position:absolute;background:rgba(255,255,255,.88);border-radius:12px;padding:4px 8px;font-size:11px;color:#4A3A3F;
+  box-shadow:0 2px 8px rgba(90,70,120,.12);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.hs-ov.tl{left:8px;top:8px;font-weight:700;font-size:12px}
+.hs-ov.tr{right:8px;top:8px}
+.hs-ov.tr{font-weight:700}.hs-ov.warn{background:#FFF1DC;color:#9A5B12}
+.hs-ov.bot{left:8px;right:8px;bottom:6px}
+.hs-fam{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}
+.hs-fam small{font-size:10px;color:var(--muted)}
+.hs-fam span{display:flex;align-items:center;gap:3px;font-weight:700;min-width:0}
+.hs-fam em{font-style:normal;font-weight:400;color:#7A6A9E;max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-fam .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot.b{background:#7F77DD}.dot.s{background:#639922}.dot.c{background:#C9A27A}
+#page-stock .srow{padding:6px 8px 6px 10px;gap:8px;margin-bottom:4px;border-radius:12px}
+#page-stock .srow .si{font-size:20px}
+#page-stock .srow .sm b{font-size:14px}
+#page-stock .sq{font-size:15px}
+#page-stock .spm button{width:30px;height:30px;font-size:16px}
+#page-stock .sbuy{padding:4px 7px;font-size:12px}
+#page-stock .sec{margin:6px 4px 4px;font-size:13px}
+#page-stock .zchips{padding-bottom:4px}
+#page-stock .zchips button{padding:5px 10px;font-size:12px}
+#stock-view > .tray-hint{display:none}
+.cardseg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cardseg button{padding:9px 0;border-radius:12px;background:var(--soft);border:2px solid transparent;font-size:14px}
+.cardseg button.on{border-color:#8E7CC3;background:#ECE6F7;font-weight:700}
+.blog small.where{color:#7A6A9E!important}
