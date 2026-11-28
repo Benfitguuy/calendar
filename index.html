@@ -89,7 +89,7 @@
         <div class="top-btns"><button id="stock-add" class="pill">＋ 新增</button></div>
       </div>
     </header>
-    <div class="mtabs stabs"><button data-tab="stock">庫存</button><button data-tab="shop">採買清單 <b id="shop-badge" class="badge"></b></button></div>
+    <div class="mtabs stabs mt3"><button data-tab="stock">庫存</button><button data-tab="shop">採買清單 <b id="shop-badge" class="badge"></b></button><button data-tab="log">購買紀錄</button></div>
     <main class="mscroll">
       <div id="stock-view"><div id="house" class="house"></div><div id="zchips" class="zchips"></div><div id="stock-list"></div>
         <p class="tray-hint">點房子裡的泡泡或上面的按鈕，只看那一區。用掉了按「−」，買了按「＋」。剩下的數量到提醒線（小黑線）就會自動加進採買清單。</p></div>
@@ -97,6 +97,7 @@
         <form id="shop-form" class="shopadd"><input id="shop-input" placeholder="要買什麼？例如：牛奶"><button class="pill">加入</button></form>
         <div id="shop-list"></div>
       </div>
+      <div id="log-view" hidden><div id="log-list"></div></div>
     </main>
   </div>
 
