@@ -118,7 +118,17 @@ function openGhost(g) {
 // ---------- 畫面 ----------
 function render() { renderHeader(); renderEvents(); renderTray(); }
 
+// v0.24 今天頁右上角的天空小插畫：白天太陽、傍晚夕陽、晚上月亮星星
+function skyDeco() {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 17) return `<svg viewBox="0 0 60 34" class="sky" aria-hidden="true"><g class="sun-spin"><circle cx="18" cy="15" r="8" fill="#FFD36E"/>${[0, 45, 90, 135, 180, 225, 270, 315].map(a => `<rect x="17" y="2" width="2" height="4" rx="1" fill="#FFD36E" transform="rotate(${a} 18 15)"/>`).join('')}</g>
+    <g class="cloud-bob"><ellipse cx="38" cy="22" rx="14" ry="7" fill="#fff"/><ellipse cx="32" cy="18" rx="8" ry="7" fill="#fff"/><ellipse cx="44" cy="19" rx="7" ry="6" fill="#fff"/></g></svg>`;
+  if (h >= 17 && h < 19) return `<svg viewBox="0 0 60 34" class="sky" aria-hidden="true"><circle cx="22" cy="22" r="10" fill="#FFB27A"/><rect x="0" y="24" width="60" height="10" fill="transparent"/><g class="cloud-bob"><ellipse cx="42" cy="20" rx="13" ry="6" fill="#FFE3EA"/><ellipse cx="36" cy="16" rx="7" ry="6" fill="#FFE3EA"/></g></svg>`;
+  return `<svg viewBox="0 0 60 34" class="sky" aria-hidden="true"><path d="M26 6 a11 11 0 1 0 10 16 a9 9 0 1 1 -10 -16z" fill="#FCE7A6"/>
+    <g class="twinkle"><path d="M44 6 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2z" fill="#FFF3C4"/><circle cx="52" cy="20" r="1.4" fill="#FFF3C4"/><circle cx="10" cy="8" r="1.2" fill="#FFF3C4"/></g></svg>`;
+}
 function renderHeader() {
+  if ($('#sky')) $('#sky').innerHTML = skyDeco();
   const d = parseYmd(sel);
   $('#month').textContent = `${d.getFullYear()}年${d.getMonth() + 1}月`;
   const sun = addDays(sel, -monOffset(d)), today = ymd(new Date());
@@ -175,7 +185,7 @@ function renderEvents() {
   }
   if (sel === ymd(new Date())) {
     const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
-    h += `<div class="now" style="top:${m / 60 * HOUR}px"></div>`;
+    h += `<div class="now" style="top:${m / 60 * HOUR}px"><svg class="nowcat" viewBox="-14 -38 40 40" aria-hidden="true"><g class="nowcat-g">${charCat('nowcatmask')}</g></svg></div>`;
   }
   box.innerHTML = h;
 }
@@ -575,6 +585,23 @@ function predictions(st) {
 }
 const predictedOn = (day, preds, st) => preds.some(s => day >= s && day <= addDays(s, st.avgLen - 1));
 
+function renderCycleLog(st) {           // v0.24 週期紀錄：每次經期開始、經期幾天、週期幾天
+  const box = $('#cycle-log'); if (!box) return;
+  const ps = pv.periods.slice().sort((a, b) => a.start < b.start ? -1 : 1), today = ymd(new Date());
+  if (!ps.length) { box.innerHTML = ''; return; }
+  const rows = ps.map((p, i) => {
+    const next = ps[i + 1], cyc = next ? diffDays(p.start, next.start) : null;
+    const len = p.end ? diffDays(p.start, p.end) + 1 : null;
+    return { p, cyc, len, sinceNow: diffDays(p.start, today) + 1 };
+  }).reverse();
+  const cycs = rows.filter(r => r.cyc).map(r => r.cyc);
+  box.innerHTML = `<div class="sec cl-head"><span>🩷 週期紀錄</span><small>${cycs.length ? `最短 ${Math.min(...cycs)}・最長 ${Math.max(...cycs)} 天` : ''}</small></div>
+    <div class="clog">${rows.map(r => `<button class="clrow" data-day="${r.p.start}"><span class="cl-d">${md(r.p.start)}<small>${r.p.start.slice(0, 4)}</small></span>
+      <span class="cl-m">經期 <b>${r.len ? r.len + ' 天' : '進行中'}</b></span>
+      <span class="cl-m">週期 <b>${r.cyc ? r.cyc + ' 天' : `第 ${r.sinceNow} 天`}</b></span>
+      <span class="cl-bar"><i style="width:${Math.min(100, (r.cyc || r.sinceNow) / 40 * 100)}%"></i><em style="width:${Math.min(100, (r.len || st.avgLen) / 40 * 100)}%"></em></span></button>`).join('')}</div>`;
+  box.querySelectorAll('.clrow').forEach(b => b.onclick = () => openDay(b.dataset.day));
+}
 function renderCycleCard(st, preds) {
   const today = ymd(new Date()), card = $('#cycle-card');
   if (!st.hasData) { card.innerHTML = '<b>還沒有經期紀錄</b><p>點經期開始的那一天，按「經期這天開始」，之後就會幫你預測下一次。</p>'; return; }
@@ -600,6 +627,8 @@ function renderMonth() {
   const st = cycleStats(), preds = predictions(st), today = ymd(new Date()), evMode = mMode === 'events';
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
+  $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
+  $('#m-deco').hidden = !evMode;
   $('#mgrid').classList.toggle('evmode', evMode);
   $('#legend').innerHTML = evMode
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
@@ -799,9 +828,9 @@ const fmtQty = n => Math.round(n * 100) / 100;
 // db.zones：[{ id, name, icon, spot }]；spot＝房子裡的位置（fridge/counter/sink/shower 是家具，f1–f5 是地上的紙箱）
 // db.stock 每一項多一個 zone（區域 id，'' ＝未分區）
 const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [4.3, 0.5, 1.25], dining: [2.4, 3.9, .8], pantry: [.6, 3.3, 1.9], toilet: [8.0, 1.2, 1.5], bed: [1.8, 7.3, .8],
-  garage: [11.7, 4.8, 1.9], garden: [2.9, 11.6, .5],
+  garage: [12.0, 8.6, .8], garden: [2.9, 11.6, .5], pet: [12.2, 2.0, .9],
   f1: [2.4, 4.8, .6], f2: [5.6, 9.2, .6], f3: [9.2, 9.1, .6], f4: [3.9, 9.3, .6], f5: [8.9, 6.0, .6] };
-const ZICONS = ['🧊', '🍳', '🍽️', '🥫', '🛁', '🚽', '🌷', '🧰', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
+const ZICONS = ['🐾', '🧊', '🍳', '🍽️', '🥫', '🛁', '🚽', '🌷', '🧰', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
 if (!db.zones) {
   db.zones = [{ id: 'z-fridge', name: '冰箱', icon: '🧊', spot: 'fridge' }, { id: 'z-counter', name: '流理臺', icon: '🍳', spot: 'counter' },
     { id: 'z-sink', name: '洗手台', icon: '🚰', spot: 'sink' }, { id: 'z-shower', name: '淋浴間', icon: '🚿', spot: 'shower' }];
@@ -820,6 +849,10 @@ if ((db.zoneV || 1) < 2) {
   db.zones.forEach(z => { if (z.spot && !SPOTS[z.spot]) z.spot = ''; });
   db.zoneV = 2; save();
 }
+setTimeout(() => { if ((db.zoneV || 1) >= 6) return;   // v0.24：加寵物房（等其他搬家跑完）
+  if (!db.zones.some(z => z.spot === 'pet')) db.zones.push({ id: 'z-pet', name: '寵物房', icon: '🐾', spot: 'pet' });
+  db.zoneV = 6; save(); if (!$('#page-stock').hidden) renderStock();
+}, 0);
 if ((db.zoneV || 1) === 4) {                                // v0.23：加餐廳
   if (!db.zones.some(z => z.spot === 'dining')) db.zones.push({ id: 'z-dining', name: '餐廳', icon: '🍽️', spot: 'dining' });
   db.zoneV = 5; save();
@@ -934,6 +967,18 @@ const TABLE = [7.1, 6.3, 1.6, 1.0];        // 茶几（人物會繞過、前後�
 // v0.22 房子外面：右前＝車庫（藍車、工具架）、左前＝小花園（柵欄、花圃、菜園、灑水壺）
 function houseOutside() {
   let h = '';
+  // 寵物房（v0.24）：粉色牆、貓跳台、狗窩、飯碗、貓砂盆、腳印地墊
+  h += box(10.15, .3, 2.95, 3.7, .12, '#FBEBDD', '#E9D3BF', '#DCC4AE');
+  h += box(10.15, .15, 2.95, .18, 2.2, '#CDB8A4', '#F7DCD3', '#EECCC2');                                   // 後牆
+  h += box(10.0, .15, .15, 3.85, 1.9, '#CDB8A4', '#F7DCD3', '#F3D2C8');                                    // 和浴室中間的牆
+  h += poly([[10.5, 1.4, .13], [12.6, 1.4, .13], [12.6, 3.0, .13], [10.5, 3.0, .13]], '#F6C9D3', 'opacity=".55"');   // 地墊
+  [[10.9, 1.9], [11.6, 2.5], [12.2, 1.8]].forEach(([x, y]) => { const [cx, cy] = ISO(x, y, .14); h += `<circle cx="${cx}" cy="${cy}" r="1.6" fill="#E79AB0"/><circle cx="${cx - 2}" cy="${cy - 2}" r=".8" fill="#E79AB0"/><circle cx="${cx + 2}" cy="${cy - 2}" r=".8" fill="#E79AB0"/>`; });
+  h += box(10.35, .45, .35, .35, 2.4, '#D9B98E', '#C8A577', '#B89568');                                    // 貓跳台柱子
+  h += box(10.2, .35, .9, .8, .14, '#F1E6DA', '#E2D3C2', '#D3C2AF', 1.2) + box(10.2, .35, .9, .8, .14, '#F1E6DA', '#E2D3C2', '#D3C2AF', 2.3);
+  h += box(11.6, .45, 1.3, 1.05, .3, '#C9A6E3', '#B591D3', '#A580C4');                                     // 狗窩
+  h += box(11.75, .6, 1.0, .75, .12, '#F6EEFB', '#E6DAF0', '#DACCE8', .3);
+  [[10.55, 3.45, '#F28CA8'], [11.05, 3.45, '#7FB2E0']].forEach(([x, y, c]) => { const [cx, cy] = ISO(x, y, .15); h += `<ellipse cx="${cx}" cy="${cy}" rx="4.2" ry="2.2" fill="${c}"/><ellipse cx="${cx}" cy="${cy - .6}" rx="2.8" ry="1.2" fill="#8B6B4A"/>`; });
+  h += box(12.2, 3.0, .75, .75, .3, '#BFD9C8', '#A9C8B4', '#97B8A2');                                       // 貓砂盆
   // 車庫：水泥地、後牆、屋頂只畫邊、工具架
   h += box(10.25, 4.4, 3.2, 5.4, .12, '#DADAD6', '#C4C4BF', '#B5B5B0');
   h += box(10.25, 4.25, 3.2, .2, 2.3, '#B9B2A6', '#E4DED4', '#D3CCC0');
@@ -962,7 +1007,7 @@ function houseOutside() {
   return h;
 }
 // v0.23 房子上的小泡泡
-const CAT_DO = ['睡午覺', '散步中', '理毛中', '發呆中', '吃飯中', '曬太陽'];
+const CAT_DO = ['睡午覺', '散步中', '理毛中', '發呆中', '吃飯中', '爬跳台'], DOG_DO = ['啃骨頭', '睡覺中', '巡邏中', '等吃飯', '搖尾巴', '玩球中'];
 function familyStatus(who) {                 // 從今天的時間軸看現在在做什麼
   const now = new Date(), day = ymd(now), m = now.getHours() * 60 + now.getMinutes();
   const ev = db.events.filter(e => !e.ghost && occursOn(e, day) && (e.owner === who || e.owner === 'both' || e.owner === 'work'))
@@ -972,13 +1017,14 @@ function familyStatus(who) {                 // 從今天的時間軸看現在�
 function houseClock() { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function houseOverlay() {
   const lows = db.stock.filter(isLow).length;
-  const cat = CAT_DO[Math.floor(Date.now() / 600000) % CAT_DO.length];       // 每 10 分鐘換一件事
+  const cat = CAT_DO[Math.floor(Date.now() / 600000) % CAT_DO.length], dog = DOG_DO[Math.floor(Date.now() / 600000 + 3) % DOG_DO.length];   // 每 10 分鐘換一件事
   return `<div class="hs-ov tl" id="hs-clock">${houseClock()}</div>
     <button class="hs-ov tr${lows ? ' warn' : ''}" id="hs-low">🔔 ${lows ? `需要補貨 ${lows} 項` : '庫存都夠'}</button>
     <div class="hs-ov bot hs-fam" id="hs-fam"><small>家人動態</small>
       <span><i class="dot b"></i>Ben<em>${esc(familyStatus('ben'))}</em></span>
       <span><i class="dot s"></i>Sarah<em>${esc(familyStatus('sarah'))}</em></span>
-      <span><i class="dot c"></i>布偶貓<em>${cat}</em></span></div>`;
+      <span><i class="dot c"></i>貓<em>${cat}</em></span>
+      <span><i class="dot d"></i>狗<em>${dog}</em></span></div>`;
 }
 setInterval(() => { if (!$('#hs-clock') || $('#page-stock').hidden) return;
   $('#hs-clock').textContent = houseClock();
@@ -1003,6 +1049,7 @@ function houseSVG() {
       <g class="mv person" id="mv-ben"><g class="flip">${charBen()}</g></g>
       <g class="mv person" id="mv-sarah"><g class="flip">${charSarah()}</g></g>
       <g class="mv pet" id="mv-cat"><g class="flip"><g class="walk">${charCat('hs-catmask')}</g></g></g>
+      <g class="mv pet" id="mv-dog"><g class="flip"><g class="walk">${charDog()}</g></g></g>
     </g>${bubbles}</svg>`;
 }
 
@@ -1018,13 +1065,21 @@ function houseWalkable(x, y) {
   if (x > TABLE[0] - .5 && x < TABLE[0] + TABLE[2] + .3 && y > TABLE[1] - .4 && y < TABLE[1] + TABLE[3] + .4) return false;
   return !db.zones.some(z => z.spot && z.spot[0] === 'f' && SPOTS[z.spot] && Math.hypot(SPOTS[z.spot][0] - x, SPOTS[z.spot][1] - y) < .8);
 }
+function petWalkable(x, y) {            // 寵物房裡面（避開貓跳台、狗窩、碗、貓砂盆）
+  if (x < 10.45 || x > 12.95 || y < 1.65 || y > 3.85) return false;
+  if (x > 12.05 && y > 2.85) return false;
+  if (x < 11.35 && y > 3.15) return false;
+  return true;
+}
+function petSpot() { for (let i = 0; i < 60; i++) { const x = 10.45 + Math.random() * 2.5, y = 1.65 + Math.random() * 2.2; if (petWalkable(x, y)) return [x, y]; } return [11.5, 2.4]; }
 function houseSpot() { for (let i = 0; i < 80; i++) { const x = .5 + Math.random() * 9.1, y = 4.4 + Math.random() * 5.2; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
 function startHouse() {
   cancelAnimationFrame(houseRaf);
-  const movers = [['mv-ben', 2.6, 8.4, .55, .52], ['mv-sarah', 5.6, 8.6, .55, .52], ['mv-cat', 7.4, 6.6, .9, .42]].map(([id, x, y, speed, size]) => {
+  const movers = [['mv-ben', 2.6, 8.4, .55, .52], ['mv-sarah', 5.6, 8.6, .55, .52], ['mv-cat', 11.0, 2.2, .5, .36, 1], ['mv-dog', 12.2, 2.4, .6, .34, 1]].map(([id, x, y, speed, size, pet]) => {
     const el = document.getElementById(id); if (!el) return null;
-    if (!houseWalkable(x, y)) [x, y] = houseSpot();
-    return { el, x, y, tx: x, ty: y, speed, size, dir: 1, wait: 600 + Math.random() * 2500 };
+    const walk = pet ? petWalkable : houseWalkable, spot = pet ? petSpot : houseSpot;
+    if (!walk(x, y)) [x, y] = spot();
+    return { el, x, y, tx: x, ty: y, speed, size, dir: 1, wait: 600 + Math.random() * 2500, walk, spot };
   }).filter(Boolean);
   if (!movers.length) return;
   const group = document.getElementById('hs-movers'), table = document.getElementById('mv-table');
@@ -1036,10 +1091,10 @@ function startHouse() {
       if (p.wait > 0) { p.wait -= dt * 1000; p.el.classList.remove('moving'); }
       else {
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-        if (d < .05) { [p.tx, p.ty] = houseSpot(); p.wait = 1200 + Math.random() * 3500; }
+        if (d < .05) { [p.tx, p.ty] = p.spot(); p.wait = 1200 + Math.random() * 3500; }
         else {
           const v = Math.min(d, p.speed * dt), nx = p.x + dx / d * v, ny = p.y + dy / d * v;
-          if (houseWalkable(nx, ny) || !houseWalkable(p.x, p.y)) { p.x = nx; p.y = ny; } else [p.tx, p.ty] = houseSpot();
+          if (p.walk(nx, ny) || !p.walk(p.x, p.y)) { p.x = nx; p.y = ny; } else [p.tx, p.ty] = p.spot();
           const sdx = dx - dy;                                                         // 螢幕上的左右
           if (Math.abs(sdx) > .02) p.dir = sdx > 0 ? 1 : -1;
           p.el.classList.add('moving');
@@ -1156,8 +1211,7 @@ const mdd = d => { const x = parseYmd(d); return `${x.getMonth() + 1}/${x.getDat
 const BUY_STORES = ['Woolworths', 'Coles', 'ALDI', 'IGA', 'Costco', 'Chemist Warehouse', 'Kmart', 'Bunnings', '亞洲超市'];
 const CARD_WHO = [['', '沒用'], ['ben', 'Ben 的'], ['sarah', 'Sarah 的']];
 const buyFields = (v, s) => {
-  const last = s && (s.buys || []).slice().sort((a, b) => a.date < b.date ? 1 : -1)[0];
-  const store = v.store !== undefined ? v.store : (last && last.store) || '', card = v.card !== undefined ? v.card : (last && last.card) || '';
+  const store = v.store || '', card = v.card || '';          // v0.24 Sarah：不要自動帶上次的店和卡
   return `<label>在哪裡買</label><input id="x-store" list="x-stores" value="${esc(store)}" placeholder="例如：Woolworths"><datalist id="x-stores">${BUY_STORES.map(x => `<option value="${x}">`).join('')}</datalist>
     <label>用誰的會員卡</label><div class="cardseg" id="x-card">${CARD_WHO.map(([k, n]) => `<button type="button" data-c="${k}" class="${k === card ? 'on' : ''}">${n}</button>`).join('')}</div>`;
 };
@@ -1286,5 +1340,8 @@ function bindStock() {
   });
 }
 
+$('#m-deco').innerHTML = `<svg viewBox="0 0 220 60"><g transform="translate(40,58) scale(.95)">${charBen()}</g><g transform="translate(78,58) scale(.95)">${charSarah()}</g>
+  <path class="heart-beat" d="M59 16 c-3 -5 -10 -3 -9 3 c1 4 9 9 9 9 s8 -5 9 -9 c1 -6 -6 -8 -9 -3z" fill="#F28CA8"/>
+  <g transform="translate(140,56) scale(.75)">${charCat('mdecomask')}</g><g transform="translate(185,56) scale(-.7,.7)">${charDog()}</g></svg>`;
 buildHours(); bind(); bindMove(); bindMonth(); bindStock(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
