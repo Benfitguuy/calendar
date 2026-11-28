@@ -659,27 +659,34 @@ function renderCycleCard(st, preds) {
 }
 
 let mCur = ymd(new Date()).slice(0, 7);
-let mMode = (() => { try { return localStorage.getItem('our-calendar-mmode') || 'events'; } catch (e) { return 'events'; } })();   // events＝只看行程、period＝只看經期
+let mMode = (() => { try { return localStorage.getItem('our-calendar-mmode') || 'events'; } catch (e) { return 'events'; } })();   // v0.30 多了 week＝週
+const mondayOf = day => addDays(day, -monOffset(parseYmd(day)));
+let wCur = mondayOf(ymd(new Date()));   // events＝只看行程、period＝只看經期
 function renderMonth() {
   const [y, m] = mCur.split('-').map(Number);
   $('#m-title').textContent = `${y}年${m}月`;
   const first = new Date(y, m - 1, 1), daysIn = new Date(y, m, 0).getDate();
   const start = addDays(ymd(first), -monOffset(first)), cells = Math.ceil((monOffset(first) + daysIn) / 7) * 7;
-  const st = cycleStats(), preds = predictions(st), today = ymd(new Date()), evMode = mMode === 'events';
+  const st = cycleStats(), preds = predictions(st), today = ymd(new Date()), evMode = mMode !== 'period', wkMode = mMode === 'week';
+  if (wkMode) { const a = parseYmd(wCur), b = parseYmd(addDays(wCur, 6));
+    $('#m-title').textContent = `${a.getMonth() + 1}/${a.getDate()} – ${b.getMonth() + 1}/${b.getDate()}`; }
+  $('#m-today').textContent = wkMode ? '回到本週' : '回到本月';
+  document.querySelector('.mframe').classList.toggle('wk', wkMode);
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
   document.body.classList.toggle('th-period', !evMode);
   if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#E4F4EC' : '#FDEAE1');
   $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
   $('#m-deco').hidden = true;                    // v0.29 Sarah：月曆下面不要人物貓狗
-  $('#mgrid').classList.toggle('evmode', evMode);
+  $('#mgrid').classList.toggle('evmode', evMode && !wkMode); $('#mgrid').classList.toggle('wkmode', wkMode);
   $('#legend').innerHTML = evMode
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
     : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>💧量</span><span>🤕症狀</span><span>🫧分泌物</span><span>💩大便</span><span>❤️親密</span><span>📝備註</span>';
-  $('#m-hint').textContent = evMode
+  $('#m-hint').textContent = wkMode ? '左右滑可以換週。點一天可以看、也可以新增行程；每天、平日重複的（例如起床）不顯示。' : evMode
     ? '左右滑可以換月份。點日期可以看、也可以新增行程。整天和好幾天的行程（例如旅行）會變成一條色條；每天、平日重複的（例如起床）不顯示。'
     : '左右滑可以換月份。點一下日期記錄經期和身體狀況；這些紀錄只存在這支手機，不會給別人看到。';
   if (!evMode) renderCycleCard(st, preds);
+  if (wkMode) { $('#mgrid').innerHTML = weekList(wCur, today); return; }
   if (evMode) { $('#mgrid').innerHTML = monthWeeks(start, cells, today); return; }
   let h = '';
   for (let i = 0; i < cells; i++) {
@@ -735,6 +742,19 @@ function monthWeeks(start, cells, today) {
   return h;
 }
 
+// v0.30 週檢視
+function weekList(ws, today) {
+  return Array.from({ length: 7 }, (_, i) => addDays(ws, i)).map(day => {
+    const d = parseYmd(day), ad = allDayOn(day), cards = cardReminders(day);
+    const evs = db.events.filter(e => !e.allDay && !e.ghost && e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
+    const chips = ad.map(e => `<span class="adc ${e.owner}">${e.owner === 'both' ? '♥ ' : ''}${esc(e.title)}${isMulti(e) ? `<small>${diffDays(e.date, day) + 1}/${diffDays(e.date, e.endDate) + 1}</small>` : ''}</span>`).join('')
+      + cards.map(c => `<span class="adc card-${c.kind}">${esc(c.title)}</span>`).join('');
+    const rows = evs.map(e => `<span class="wrow ${e.owner}"><b>${e.start}${e.end ? '–' + e.end : ''}</b>${e.owner === 'both' ? '♥ ' : ''}${esc(e.title)}</span>`).join('');
+    return `<button class="wday${day === today ? ' today' : ''}${d.getDay() % 6 === 0 ? ' wkend' : ''}" data-day="${day}"><span class="wdate"><small>週${WEEK[d.getDay()]}</small><b>${d.getDate()}</b></span>
+      <span class="wbody">${chips ? `<span class="wchips">${chips}</span>` : ''}${rows || (chips ? '' : '<span class="wempty">沒有行程</span>')}</span></button>`;
+  }).join('');
+}
+
 function startPeriod(day, st) {
   pv.periods.filter(x => !x.end && x.start < day).forEach(x => {   // 上一次忘了按結束 → 自動補上
     const e1 = addDays(x.start, st.avgLen - 1), e2 = addDays(day, -1); x.end = e1 < e2 ? e1 : e2;
@@ -758,7 +778,7 @@ function openDay(day, edit = false) {
   const evs = db.events.filter(e => occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
   const d = parseYmd(day);
   let html = `<h3>${d.getMonth() + 1}月${d.getDate()}日（${WEEK[d.getDay()]}）</h3>`;
-  if (mMode === 'events') {
+  if (mMode !== 'period') {
     const cards = cardReminders(day);
     evs.sort((a, b) => (b.allDay ? 1 : 0) - (a.allDay ? 1 : 0));
     html += `<div class="evlist">${cards.map(c => `<div class="evrow card-${c.kind}"><span>整天</span>${esc(c.title)}</div>`).join('')}${evs.length ? evs.map(e => `<button class="evrow ${e.owner}${e.ghost ? ' evg' : ''}" ${e.allDay ? `data-ev="${e.id}"` : 'data-goto="1"'}>
@@ -864,6 +884,7 @@ function showPage(name) {
   ['day', 'month', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.body.className = 'th-' + name;                      // 每個分頁不同顏色
   const tc = { day: '#FCE9EF', month: mMode === 'period' ? '#FDEAE1' : '#E4F4EC', stock: '#ECE6F7' }[name];
+  if (name === 'month') wCur = mondayOf(sel);
   document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
   if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
@@ -873,7 +894,8 @@ function showPage(name) {
 function goDay(day) { sel = day; closeSheet(); showPage('day'); scrollToNow(); }
 function slideMonth(n) {
   const g = $('#mgrid'); g.classList.remove('slide-l', 'slide-r'); void g.offsetWidth;
-  shiftMonth(n); g.classList.add(n > 0 ? 'slide-l' : 'slide-r');
+  if (mMode === 'week') { wCur = addDays(wCur, 7 * n); renderMonth(); } else shiftMonth(n);
+  g.classList.add(n > 0 ? 'slide-l' : 'slide-r');
 }
 const shiftMonth = n => { const [y, m] = mCur.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); mCur = ymd(d).slice(0, 7); renderMonth(); };
 function bindAllDay() {
@@ -894,8 +916,8 @@ function bindMonth() {
     const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) slideMonth(dx < 0 ? 1 : -1);
   });
-  $('#m-today').onclick = () => { mCur = ymd(new Date()).slice(0, 7); renderMonth(); };
-  $('#mgrid').addEventListener('click', e => { const b = e.target.closest('.mday'); if (b) openDay(b.dataset.day); });
+  $('#m-today').onclick = () => { mCur = ymd(new Date()).slice(0, 7); wCur = mondayOf(ymd(new Date())); renderMonth(); };
+  $('#mgrid').addEventListener('click', e => { const b = e.target.closest('.mday,.wday'); if (b) openDay(b.dataset.day); });
   document.querySelectorAll('.mtabs button').forEach(b => b.onclick = () => {
     mMode = b.dataset.mode; try { localStorage.setItem('our-calendar-mmode', mMode); } catch (e) { }
     renderMonth();
