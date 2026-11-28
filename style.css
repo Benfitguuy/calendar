@@ -339,3 +339,15 @@ body.th-money .pos{color:#4E7F55}
 .zlist{display:flex;flex-direction:column;gap:6px}
 .zrow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:#fff;border:1px solid var(--line);text-align:left;font-size:16px}
 .zrow b{flex:1;font-weight:600}.zrow small{color:var(--muted)}.zrow .chev{color:var(--muted)}
+
+/* v0.19 購買紀錄 */
+.sbuy{flex:none;padding:6px 9px;margin-right:4px;border-radius:999px;background:#FFE7C8;color:#9A5B12;font-size:13px;font-weight:700}
+.blog{display:flex;align-items:center;gap:10px;width:100%;padding:12px;margin-bottom:6px;border-radius:14px;background:#fff;border:1px solid #E6DEF3;text-align:left}
+.blog .si{font-size:24px}.blog .bm{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.blog .bm b{font-size:16px}.blog .bm small,.blog b small{font-size:12px;color:var(--muted);font-weight:400}
+.blog em{font-style:normal;font-size:14px;font-weight:700;color:#6A5A9E}.blog em.using{color:#C08A2E;font-weight:500;font-size:13px}
+.avgs{display:flex;flex-wrap:wrap;gap:6px}.avgs span{padding:6px 10px;border-radius:999px;background:#fff;border:1px solid #E6DEF3;font-size:13px}
+.avgs b{color:#6A5A9E}
+#sheet select{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--text)}
+.chk{display:flex!important;align-items:center;gap:8px;color:var(--text)!important;font-size:15px!important}
+[hidden]{display:none!important}
