@@ -420,3 +420,10 @@ body.th-month.th-period{--bg:#FDEBF1;--card:#FFF8FA;--line:#F5D5E0;--line2:#FBE9
 .zl{stroke:#B9A8DC;stroke-width:1;stroke-dasharray:2.5 2;fill:none}.zl.on{stroke:#8E7CC3;stroke-width:1.6;stroke-dasharray:none}
 .zd{fill:#fff;stroke:#8E7CC3;stroke-width:1.4}.zd.on{fill:#8E7CC3}
 .hs-famrow{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:6px 10px;border-radius:12px;background:rgba(255,255,255,.85);font-size:11px;white-space:nowrap;overflow-x:auto}
+
+/* v0.26 底色偏奶油：今天＝奶油杏、月曆行事曆＝奶油黃、月曆經期＝奶油玫瑰（庫存不變） */
+body.th-day{--bg:#FFF5EC;--card:#FFFCF8;--line:#F3E2D3;--line2:#FAEFE5;--soft:#F7E6D6;--muted:#A89382;--hi:#FDEBDD;--hi-bd:#E8A27C}
+body.th-month{--bg:#F8F4E8;--card:#FFFDF7;--line:#EAE2CB;--line2:#F3EEDF;--soft:#EFE7D2;--muted:#9C937C;--hi:#F3EDDC;--hi-bd:#C9A95C}
+body.th-month.th-period{--bg:#FDEFEA;--card:#FFFAF7;--line:#F3D9D2;--line2:#FAEAE5;--soft:#F6DCD6;--muted:#A88E8A;--hi:#FBE4DD;--hi-bd:#E58E8E}
+.hs-famrow{flex-wrap:wrap;row-gap:3px;column-gap:10px;white-space:normal;overflow:visible}.hs-famrow span{flex:none}.hs-famrow em{max-width:none;overflow:visible}
+.pd-badge{margin-left:4px;padding:1px 6px;border-radius:8px;background:#FCE0E8;color:#B2365A;font-size:10px;font-weight:700}
