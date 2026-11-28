@@ -390,3 +390,24 @@ body.th-money .pos{color:#4E7F55}
 .cardseg button{padding:9px 0;border-radius:12px;background:var(--soft);border:2px solid transparent;font-size:14px}
 .cardseg button.on{border-color:#8E7CC3;background:#ECE6F7;font-weight:700}
 .blog small.where{color:#7A6A9E!important}
+
+/* v0.24 小插畫、週期紀錄 */
+#sky{flex:1;display:flex;justify-content:center}
+.sky{width:58px;height:33px}
+.sun-spin{animation:spin 18s linear infinite;transform-box:fill-box;transform-origin:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cloud-bob{animation:cbob 4s ease-in-out infinite}@keyframes cbob{50%{transform:translateX(-3px)}}
+.twinkle{animation:tw 2.4s ease-in-out infinite}@keyframes tw{50%{opacity:.35}}
+.nowcat{position:absolute;right:-4px;top:-27px;width:26px;height:26px;pointer-events:none}
+.tray-plant{width:16px;height:17px;vertical-align:-3px;margin-right:3px}
+.mdeco{display:flex;justify-content:center;margin:10px 0 4px}.mdeco svg{width:230px;height:64px}
+.heart-beat{animation:hb 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes hb{50%{transform:scale(1.18)}}
+.dot.d{background:#3A3230}
+.cl-head{display:flex;justify-content:space-between;align-items:baseline}.cl-head small{font-weight:400;font-size:12px}
+.clog{display:flex;flex-direction:column;gap:6px}
+.clrow{display:grid;grid-template-columns:56px 1fr 1fr;grid-template-rows:auto 6px;gap:2px 8px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line);text-align:left}
+.cl-d{font-size:16px;font-weight:700;display:flex;flex-direction:column;line-height:1.1}.cl-d small{font-size:10px;color:var(--muted);font-weight:400}
+.cl-m{font-size:13px;color:var(--muted)}.cl-m b{color:#B2365A;font-size:15px}
+.cl-bar{grid-column:1/4;position:relative;height:6px;border-radius:3px;background:#F6E3EA;overflow:hidden}
+.cl-bar i{position:absolute;left:0;top:0;bottom:0;background:#F8CAD7;border-radius:3px}
+.cl-bar em{position:absolute;left:0;top:0;bottom:0;background:#E46A8E;border-radius:3px}
