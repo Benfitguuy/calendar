@@ -628,7 +628,7 @@ function renderMonth() {
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
   document.body.classList.toggle('th-period', !evMode);
-  if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#EEF2FD' : '#FDEBF1');
+  if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#F8F4E8' : '#FDEFEA');
   $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
   $('#m-deco').hidden = !evMode;
   $('#mgrid').classList.toggle('evmode', evMode);
@@ -786,7 +786,7 @@ function openDay(day, edit = false) {
 function showPage(name) {
   ['day', 'month', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.body.className = 'th-' + name;                      // 每個分頁不同顏色
-  const tc = { day: '#FDF1F5', month: mMode === 'period' ? '#FDEBF1' : '#EEF2FD', stock: '#ECE6F7' }[name];
+  const tc = { day: '#FFF5EC', month: mMode === 'period' ? '#FDEFEA' : '#F8F4E8', stock: '#ECE6F7' }[name];
   document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
   if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
@@ -1024,7 +1024,7 @@ function houseOverlay() {
     <button class="hs-ov tr${lows ? ' warn' : ''}" id="hs-low">🔔 ${lows ? `需要補貨 ${lows} 項` : '庫存都夠'}</button>
     <div class="hs-famrow hs-fam" id="hs-fam"><small>家人動態</small>
       <span><i class="dot b"></i>Ben<em>${esc(familyStatus('ben'))}</em></span>
-      <span><i class="dot s"></i>Sarah<em>${esc(familyStatus('sarah'))}</em></span>
+      <span><i class="dot s"></i>Sarah<em>${esc(familyStatus('sarah'))}</em>${(() => { const t = ymd(new Date()), pd = periodOn(t, cycleStats()); return pd ? `<b class="pd-badge">🌸 經期第 ${diffDays(pd.start, t) + 1} 天</b>` : ''; })()}</span>
       <span><i class="dot c"></i>貓<em>${cat}</em></span>
       <span><i class="dot d"></i>狗<em>${dog}</em></span></div>`;
 }
