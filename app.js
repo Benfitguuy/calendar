@@ -73,6 +73,48 @@ function occursOn(e, day) {
   }
 }
 
+// ---------- v0.21 移動／取消紀錄 ----------
+const dayLabel = d => { const x = parseYmd(d); return `週${WEEK[x.getDay()]} ${x.getMonth() + 1}/${x.getDate()}`; };
+function leaveGhost(e, day, kind, to) {       // 在原本那天留一個小格子
+  db.events.push({ id: uid(), ghost: kind, srcId: e.id, title: e.title, owner: e.owner, date: day, start: e.start, end: '', repeat: 'none', ex: [], to: to || null });
+}
+function moveEventTo(e, fromDay, toDay, start, end) {
+  const oldStart = e.start;
+  if (e.repeat !== 'none') {                    // 重複行程：只搬這一天
+    (e.ex = e.ex || []).push(fromDay);
+    const n = { id: uid(), title: e.title, owner: e.owner, date: toDay, start, end, repeat: 'none', ex: [], note: e.note || '', from: { date: fromDay, start: oldStart } };
+    db.events.push(n); leaveGhost(n, fromDay, 'moved', { date: toDay, start }); db.events[db.events.length - 1].start = oldStart; return;
+  }
+  // 搬回之前待過的那天：把那天的紀錄拿掉
+  db.events = db.events.filter(g => !(g.ghost && g.srcId === e.id && g.date === toDay));
+  db.events.forEach(g => { if (g.ghost === 'moved' && g.srcId === e.id) g.to = { date: toDay, start }; });   // 更早的紀錄也改指到新的日子
+  if (fromDay !== toDay) { leaveGhost(e, fromDay, 'moved', { date: toDay, start }); e.from = { date: fromDay, start: oldStart }; }
+  if (e.from && e.from.date === toDay) delete e.from;
+  Object.assign(e, { date: toDay, start, end });
+}
+function cancelEvent(e, day) {
+  if (e.repeat !== 'none') { (e.ex = e.ex || []).push(day); leaveGhost(e, day, 'cancelled'); }
+  else { e.ghost = 'cancelled'; e.srcId = e.id; delete e.to; }
+}
+function openGhost(g) {
+  const moved = g.ghost === 'moved';
+  openSheet(`<h3>${moved ? '↪ 已移動' : '✕ 已取消'}</h3>
+    <p class="ghostinfo"><b>${esc(g.title)}</b><br>原本：${dayLabel(g.date)} ${g.start}${moved && g.to ? `<br>移到：${dayLabel(g.to.date)} ${g.to.start}` : ''}</p>
+    <div class="btns">${moved && g.to ? '<button class="primary" id="g-go">看移過去的那天</button>' : ''}
+      ${!moved ? '<button class="primary" id="g-back">恢復這個活動</button>' : ''}
+      <button class="danger" id="g-del">刪除這個紀錄</button><button id="g-no">關閉</button></div>
+    <p class="hint">這是移動／取消的紀錄，只是提醒用，不能拖曳。</p>`);
+  $('#g-no').onclick = closeSheet;
+  if ($('#g-go')) $('#g-go').onclick = () => goDay(g.to.date);
+  if ($('#g-back')) $('#g-back').onclick = () => {
+    const src = db.events.find(x => x.id === g.srcId && x !== g);
+    if (src && src.repeat !== 'none') { src.ex = (src.ex || []).filter(d => d !== g.date); db.events = db.events.filter(x => x !== g); }
+    else { delete g.ghost; delete g.to; if (!g.end) g.end = g.end0 || ''; }
+    save(); closeSheet(); render(); toast('已恢復');
+  };
+  $('#g-del').onclick = () => { db.events = db.events.filter(x => x !== g); save(); closeSheet(); render(); toast('已刪除紀錄'); };
+}
+
 // ---------- 畫面 ----------
 function render() { renderHeader(); renderEvents(); renderTray(); }
 
@@ -111,19 +153,25 @@ function layoutLanes(items) {
 function renderEvents() {
   const box = $('#events');
   const items = db.events.filter(e => occursOn(e, sel)).map(e => {
-    const s = toMin(e.start), e2 = e.end ? Math.max(toMin(e.end), s + 15) : s + NO_END_MINS;
+    const s = toMin(e.start), e2 = e.ghost ? s + 15 : e.end ? Math.max(toMin(e.end), s + 15) : s + NO_END_MINS;
     return { ev: e, s, e: e2 };
   });
   ['ben', 'sarah'].forEach(o => layoutLanes(items.filter(i => i.ev.owner === o)));
   let h = '';
   for (const it of items) {
-    const o = it.ev.owner, top = it.s / 60 * HOUR, ht = Math.max(24, (it.e - it.s) / 60 * HOUR - 2);
+    const o = it.ev.owner, top = it.s / 60 * HOUR, ht = it.ev.ghost ? 20 : Math.max(24, (it.e - it.s) / 60 * HOUR - 2);
     let left, width;
     if (isShared(o)) { left = 0; width = 100; }
     else { const base = o === 'ben' ? 0 : 50; width = 50 / it.n; left = base + it.lane * width; }
+    if (it.ev.ghost) {
+      const g = it.ev, txt = g.ghost === 'moved' ? `↪ ${esc(g.title)} 移至 ${g.to ? dayLabel(g.to.date) + (g.to.start !== g.start ? ' ' + g.to.start : '') : '別天'}` : `✕ ${esc(g.title)} 已取消`;
+      h += `<div class="ev evg ${g.ghost} ${o}" data-id="${g.id}" style="top:${top + 1}px;height:${ht}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px)"><b>${txt}</b></div>`;
+      continue;
+    }
+    const fromTag = it.ev.from ? `<small class="from">↩ 從${dayLabel(it.ev.from.date)}移過來</small>` : '';
     const icon = /起床/.test(it.ev.title) ? '☀︎ ' : /就寢|睡/.test(it.ev.title) ? '☾ ' : o === 'both' ? '♥ ' : o === 'work' ? '💼 ' : '';
     h += `<div class="ev ${o}" data-id="${it.ev.id}" style="top:${top + 1}px;height:${ht}px;left:calc(${left}% + 2px);width:calc(${width}% - 4px)">
-      <b>${it.ev.end ? '' : `<span class="st">${it.ev.start}</span> `}${icon}${esc(it.ev.title)}</b>${it.ev.end && ht >= 36 ? `<small>${it.ev.start}–${it.ev.end}${it.ev.repeat !== 'none' ? ' · ↻' + REPEAT[it.ev.repeat] : ''}</small>` : ''}${it.ev.note && ht >= 52 ? `<small class="note">📝 ${esc(it.ev.note)}</small>` : ''}</div>`;
+      <b>${it.ev.from && ht < 36 ? '↩ ' : ''}${it.ev.end ? '' : `<span class="st">${it.ev.start}</span> `}${icon}${esc(it.ev.title)}</b>${ht >= 36 ? fromTag : ''}${it.ev.end && ht >= 36 ? `<small>${it.ev.start}–${it.ev.end}${it.ev.repeat !== 'none' ? ' · ↻' + REPEAT[it.ev.repeat] : ''}</small>` : ''}${it.ev.note && ht >= 52 ? `<small class="note">📝 ${esc(it.ev.note)}</small>` : ''}</div>`;
   }
   if (sel === ymd(new Date())) {
     const n = new Date(), m = n.getHours() * 60 + n.getMinutes();
@@ -189,11 +237,12 @@ function openEvent(e, preset = {}) {
     <label>重複</label>
     <select id="f-repeat">${Object.entries(REPEAT).filter(([k]) => REPEAT_MENU.includes(k) || k === v.repeat).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
     <label>備註</label><input id="f-note" value="${esc(v.note || '')}" placeholder="例如：記得帶健保卡、地址">
-    ${!isNew && rep ? '<p class="hint">這是重複的行程，修改會套用到每一天。</p>' : ''}
+    ${!isNew && rep ? '<p class="hint">這是重複的行程，修改會套用到每一天。只想搬這一天，按下面「移到別天」。</p>' : ''}
+    ${!isNew && v.from ? `<p class="hint">↩ 從${dayLabel(v.from.date)} ${v.from.start} 移過來</p>` : ''}
     <p class="err" id="f-err"></p>
     <div class="btns" id="f-btns">
       <button class="primary" id="f-save">儲存</button>
-      ${isNew ? '' : '<button id="f-back">移回待安排</button><button class="danger" id="f-del">刪除</button>'}
+      ${isNew ? '' : `<button id="f-move">📅 移到別天${rep ? '（只搬這一天）' : ''}</button><button id="f-cxl">✕ 取消活動（留紀錄）</button><button id="f-back">移回待安排</button><button class="danger" id="f-del">刪除（不留紀錄）</button>`}
       <button id="f-cancel">取消</button>
     </div>`);
   bindSeg();
@@ -215,10 +264,39 @@ function openEvent(e, preset = {}) {
       end = toTime(m);
     }
     const data = { title, owner: segValue(), date, start, end, repeat: $('#f-repeat').value, note: $('#f-note').value.trim() };
-    if (isNew) db.events.push({ id: uid(), ex: [], ...data }); else Object.assign(e, data);
+    if (isNew) db.events.push({ id: uid(), ex: [], ...data });
+    else if (!rep && data.repeat === 'none' && data.date !== e.date) {      // 單次行程改了日期＝移動，留紀錄
+      const from = e.date; moveEventTo(e, from, data.date, data.start, data.end);
+      Object.assign(e, data); save(); closeSheet(); render(); toast(`已移到${dayLabel(data.date)}，${dayLabel(from)}留了紀錄`); return;
+    } else Object.assign(e, data);
     save(); closeSheet(); renderEvents(); toast('已儲存');
   };
   if (isNew) return;
+  $('#f-move').onclick = () => {
+    const day = rep ? sel : e.date;
+    openSheet(`<h3>📅 移到別天</h3><p class="hint">「${esc(e.title)}」原本 ${dayLabel(day)} ${e.start}</p>
+      <div class="row2"><div><label>新的日期</label><input id="mv-date" type="date" value="${addDays(day, 1)}"></div>
+        <div><label>開始時間</label><input id="mv-start" type="time" step="300" value="${e.start}"></div></div>
+      <p class="hint">原本那天會留一個小格子寫「移至…」，新的那天會寫「從…移過來」。</p><p class="err" id="mv-err"></p>
+      <div class="btns"><button class="primary" id="mv-ok">移過去</button><button id="mv-no">取消</button></div>`);
+    $('#mv-no').onclick = closeSheet;
+    $('#mv-ok').onclick = () => {
+      const to = $('#mv-date').value, start = $('#mv-start').value;
+      if (!to || !start) return $('#mv-err').textContent = '請選日期和時間';
+      if (to === day && start === e.start) return $('#mv-err').textContent = '日期和時間都沒變';
+      const dur = e.end ? toMin(e.end) - toMin(e.start) : 0;
+      if (dur && toMin(start) + dur > 1439) return $('#mv-err').textContent = '這個時間開始會超過半夜 12 點';
+      const end = dur ? toTime(toMin(start) + dur) : '';
+      if (to === day) { if (rep) { (e.ex = e.ex || []).push(day); db.events.push({ id: uid(), title: e.title, owner: e.owner, date: day, start, end, repeat: 'none', ex: [], note: e.note || '' }); } else Object.assign(e, { start, end }); }
+      else moveEventTo(e, day, to, start, end);
+      save(); closeSheet(); render(); toast(to === day ? `已改到 ${start}` : `已移到${dayLabel(to)}`);
+    };
+  };
+  $('#f-cxl').onclick = () => {
+    const day = rep ? sel : e.date;
+    e.end0 = e.end;
+    cancelEvent(e, day); save(); closeSheet(); render(); toast(`已取消，${dayLabel(day)}留了紀錄`);
+  };
   $('#f-back').onclick = () => {
     db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins: 0, note: e.note || '' });
     removeEvent(e, rep ? 'one' : 'all');
@@ -343,7 +421,7 @@ function bind() {
   $('#events').addEventListener('click', e => {
     if (Date.now() < suppressClickUntil) return;
     const evEl = e.target.closest('.ev');
-    if (evEl) { const ev = db.events.find(x => x.id === evEl.dataset.id); if (ev) openEvent(ev); return; }
+    if (evEl) { const ev = db.events.find(x => x.id === evEl.dataset.id); if (ev) ev.ghost ? openGhost(ev) : openEvent(ev); return; }
     const r = $('#events').getBoundingClientRect();
     const owner = e.clientX - r.left < r.width / 2 ? 'ben' : 'sarah';
     const s = Math.floor((e.clientY - r.top) / HOUR * 2) * 30;
@@ -366,7 +444,7 @@ function bind() {
 let mv = null, suppressClickUntil = 0;
 const HOLD_MS = 400;
 function evStart(x, y, el) {
-  const e = db.events.find(v => v.id === el.dataset.id); if (!e) return;
+  const e = db.events.find(v => v.id === el.dataset.id); if (!e || e.ghost) return;
   mv = { e, el, x0: x, y0: y, y, active: false, raf: 0,
     s0: toMin(e.start), dur: e.end ? Math.max(15, toMin(e.end) - toMin(e.start)) : NO_END_MINS, newStart: null,
     timer: setTimeout(() => liftEvent(), HOLD_MS) };
@@ -540,7 +618,7 @@ function renderMonth() {
     if (evMode) {
       const evs = db.events.filter(e => e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, day))
         .sort((a, b) => a.start < b.start ? -1 : 1);
-      inner = evs.slice(0, 3).map(e => `<span class="mini ${e.owner}">${esc(e.title)}</span>`).join('')
+      inner = evs.slice(0, 3).map(e => `<span class="mini ${e.owner}${e.ghost ? ' evg' : ''}">${e.ghost === 'moved' ? '↪' : e.ghost ? '✕' : ''}${esc(e.title)}</span>`).join('')
         + (evs.length > 3 ? `<span class="more">+${evs.length - 3}</span>` : '');
     } else {
       const pd = periodOn(day, st);
@@ -577,8 +655,8 @@ function openDay(day, edit = false) {
   const d = parseYmd(day);
   let html = `<h3>${d.getMonth() + 1}月${d.getDate()}日（${WEEK[d.getDay()]}）</h3>`;
   if (mMode === 'events') {
-    html += `<div class="evlist">${evs.length ? evs.map(e => `<button class="evrow ${e.owner}" data-goto="1">
-      <span>${e.start}${e.end ? '–' + e.end : ''}</span>${esc(e.title)}${e.note ? `<em class="evnote">📝 ${esc(e.note)}</em>` : ''}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
+    html += `<div class="evlist">${evs.length ? evs.map(e => `<button class="evrow ${e.owner}${e.ghost ? ' evg' : ''}" data-goto="1">
+      <span>${e.start}${e.end && !e.ghost ? '–' + e.end : ''}</span>${e.ghost === 'moved' ? `↪ ${esc(e.title)} 移至${e.to ? dayLabel(e.to.date) : '別天'}` : e.ghost ? `✕ ${esc(e.title)} 已取消` : esc(e.title)}${e.from ? `<em class="evnote">↩ 從${dayLabel(e.from.date)}移過來</em>` : ''}${e.note && !e.ghost ? `<em class="evnote">📝 ${esc(e.note)}</em>` : ''}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
       <div class="btns"><button class="primary" id="d-add">在這天新增行程</button><button id="d-goto">打開這天的時間軸</button><button id="p-close">關閉</button></div>`;
     openSheet(html);
     $('#sheet').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => goDay(day));
