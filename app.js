@@ -720,9 +720,9 @@ const fmtQty = n => Math.round(n * 100) / 100;
 // ---------- v0.17 庫存區域＋小房子（參考 HomeStock，Adam 原創 SVG） ----------
 // db.zones：[{ id, name, icon, spot }]；spot＝房子裡的位置（fridge/counter/sink/shower 是家具，f1–f5 是地上的紙箱）
 // db.stock 每一項多一個 zone（區域 id，'' ＝未分區）
-const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], sink: [6.2, 0.65, 1.3], shower: [9.4, 2.2, 1.6],
-  f1: [2.4, 5.0, .6], f2: [7.6, 5.4, .6], f3: [8.6, 8.8, .6], f4: [5.6, 9.3, .6], f5: [2.2, 9.2, .6] };
-const ZICONS = ['🧊', '🍳', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
+const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], toilet: [7.7, .9, 1.4], bed: [8.3, 5.4, .8],
+  f1: [2.4, 5.0, .6], f2: [6.4, 8.6, .6], f3: [8.8, 9.0, .6], f4: [4.4, 9.4, .6], f5: [2.2, 9.2, .6] };
+const ZICONS = ['🧊', '🍳', '🚽', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
 if (!db.zones) {
   db.zones = [{ id: 'z-fridge', name: '冰箱', icon: '🧊', spot: 'fridge' }, { id: 'z-counter', name: '流理臺', icon: '🍳', spot: 'counter' },
     { id: 'z-sink', name: '洗手台', icon: '🚰', spot: 'sink' }, { id: 'z-shower', name: '淋浴間', icon: '🚿', spot: 'shower' }];
@@ -730,6 +730,16 @@ if (!db.zones) {
     : /牙|洗手|洗面|刮鬍|衛生紙/.test(n) ? 'z-sink' : /米|麵|油|鹽|糖|醬|洗碗|菜瓜布/.test(n) ? 'z-counter' : '';
   db.stock.forEach(s => { if (s.zone === undefined) s.zone = guess(s.name); });
   save();
+}
+if ((db.zoneV || 1) < 2) {
+  const sink = db.zones.find(z => z.spot === 'sink'), shower = db.zones.find(z => z.spot === 'shower');
+  let wc = shower || db.zones.find(z => z.spot === 'toilet');
+  if (!wc) { wc = { id: 'z-wc', name: '廁所', icon: '🚽', spot: 'toilet' }; db.zones.push(wc); }
+  Object.assign(wc, { name: shower && shower.name !== '淋浴間' ? shower.name : '廁所', icon: shower && shower.name !== '淋浴間' ? shower.icon : '🚽', spot: 'toilet' });
+  if (sink) { db.stock.forEach(s => { if (s.zone === sink.id) s.zone = wc.id; }); db.zones = db.zones.filter(z => z !== sink); }
+  if (!db.zones.some(z => z.spot === 'bed')) db.zones.push({ id: 'z-room', name: '房間', icon: '🛏️', spot: 'bed' });
+  db.zones.forEach(z => { if (z.spot && !SPOTS[z.spot]) z.spot = ''; });
+  db.zoneV = 2; save();
 }
 let selZone = '';                       // '' ＝全部；'_none' ＝未分區；其他＝區域 id
 const zoneOf = id => db.zones.find(z => z.id === id);
@@ -755,7 +765,7 @@ function houseStatic() {
   h += box(0, 0, 10, 10, .4, '#E9C99B', '#C9A77A', '#B8966A', -.4);                                // 地板
   h += tiles(0, 0, 5, 4, '#F6E3C9', '#FBEFDF') + tiles(5, 0, 10, 4, '#D4E8F1', '#EEF6FA');         // 廚房、浴室地磚
   for (let y = 4.5; y < 10; y += 1) h += `<polyline points="${P([[0, y], [10, y]])}" stroke="#DDB989" stroke-width=".8" fill="none"/>`;
-  h += poly([[2.1, 5.4], [6.6, 5.4], [6.6, 8.8], [2.1, 8.8]], '#F7D88F', 'opacity=".85"');         // 地毯
+  h += poly([[2.0, 5.5], [5.1, 5.5], [5.1, 8.8], [2.0, 8.8]], '#F7D88F', 'opacity=".85"');         // 地毯
   // 後面兩道牆＋窗
   h += poly([[0, 0, 0], [5, 0, 0], [5, 0, 3], [0, 0, 3]], '#F6E7D6') + poly([[5, 0, 0], [10, 0, 0], [10, 0, 3], [5, 0, 3]], '#E2EEF4');
   h += poly([[0, 0, 0], [0, 10, 0], [0, 10, 3], [0, 0, 3]], '#F3DCCB');
@@ -776,23 +786,25 @@ function houseStatic() {
   [2.3, 3.4].forEach(x => h += `<polyline points="${P([[x, 1.26, .3], [x, 1.26, 1]])}" stroke="#C9A97E" stroke-width="1" fill="none"/>`);
   // 廚房和浴室中間的矮牆、浴室和客廳中間的矮牆
   h += box(4.9, 0, .2, 2.8, 1.6, '#CDB8A4', '#EADFD3', '#F1E6DA');
-  // 洗手台＋鏡子
-  h += poly([[5.7, 0, 1.75], [6.8, 0, 1.75], [6.8, 0, 2.7], [5.7, 0, 2.7]], '#EAF6FC', 'stroke="#B6CFDD" stroke-width="1.5"');
-  h += box(5.5, .15, 1.5, 1, 1.3, '#FFFFFF', '#CFE1EC', '#B9D0DE');
-  h += poly([[5.85, .35, 1.31], [6.65, .35, 1.31], [6.65, .95, 1.31], [5.85, .95, 1.31]], '#BFDDEB');
-  // 馬桶
-  h += box(7.3, .15, .8, .3, 1.15, '#fff', '#EEF3F6', '#DDE6EB') + box(7.35, .45, .7, .75, .6, '#fff', '#F1F5F8', '#DDE6EB');
-  // 淋浴間（玻璃）
-  h += box(8.15, .15, 1.75, 1.9, .12, '#DCEBF2', '#C3D7E2', '#B5CCD8');
-  h += `<polyline points="${P([[9.4, 0, 2.7], [9.4, .5, 2.7]])}" stroke="#9FB6C4" stroke-width="2" stroke-linecap="round" fill="none"/>`;
+  // 廁所（v0.18：拿掉洗手台和淋浴間，只留馬桶）
+  h += poly([[6.4, .9], [8.9, .9], [8.9, 2.4], [6.4, 2.4]], '#B9D9E8', 'opacity=".55"');                 // 腳踏墊
+  h += box(7.15, .15, 1.1, .4, 1.45, '#FFFFFF', '#EEF3F6', '#DCE5EA') + box(7.25, .55, .9, 1, .7, '#FFFFFF', '#F2F6F8', '#DCE5EA');
+  h += poly([[7.4, .7, .71], [8.0, .7, .71], [8.0, 1.4, .71], [7.4, 1.4, .71]], '#D6E6EE');
+  h += poly([[5.6, 0, 1.7], [6.4, 0, 1.7], [6.4, 0, 2.1], [5.6, 0, 2.1]], '#F2B8C2');                     // 毛巾
+  h += box(9.2, .15, .65, .6, 1.1, '#F4F8FA', '#D9E6EC', '#C7D8E0');                                       // 小櫃子
   h += box(6.2, 3.9, 3.8, .2, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');
-  h += poly([[8.15, 2.05, .12], [9.9, 2.05, .12], [9.9, 2.05, 2.9], [8.15, 2.05, 2.9]], '#CFE8F5', 'opacity=".5" stroke="#fff" stroke-width="1.2"');
-  h += poly([[9.9, .15, .12], [9.9, 2.05, .12], [9.9, 2.05, 2.9], [9.9, .15, 2.9]], '#CFE8F5', 'opacity=".45" stroke="#fff" stroke-width="1.2"');
   // 客廳：沙發、盆栽、書櫃
   h += box(.15, 5.2, 1.2, 3.2, .7, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 5.2, .4, 3.2, 1.45, '#8CC3B3', '#73AE9E', '#65A090');
   h += box(.15, 5.0, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 8.3, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090');
-  h += box(9.2, 5.6, .65, 1.8, 2.3, '#EBD3B4', '#D4B48C', '#C4A37A');
-  [.9, 1.6].forEach(z => h += `<polyline points="${P([[9.2, 7.41, z], [9.85, 7.41, z]])}" stroke="#B48E62" stroke-width="1" fill="none"/>`);
+  // 房間（v0.18）：木地板換淺色、床、床頭櫃
+  h += poly([[5.5, 4.1], [10, 4.1], [10, 10], [5.5, 10]], '#F2DDC0');
+  h += poly([[6.2, 7.6], [9.6, 7.6], [9.6, 9.4], [6.2, 9.4]], '#F6D6DC', 'opacity=".9"');
+  h += box(7.1, 4.15, 2.3, .3, 1.25, '#C9B0D9', '#B79BC9', '#A88BBB');                                    // 床頭板
+  h += box(7.1, 4.45, 2.3, 2.7, .55, '#FFFFFF', '#E3D7EC', '#D6C7E2');
+  h += box(7.1, 5.6, 2.3, 1.55, .58, '#C7B2DE', '#B39BCF', '#A58DC2');                                      // 被子
+  h += box(7.35, 4.6, .9, .6, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8') + box(8.35, 4.6, .9, .6, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8');
+  h += box(9.55, 4.2, .4, .45, .65, '#EBD3B4', '#D4B48C', '#C4A37A');
+  h += box(5.3, 5.5, .2, 4.5, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');                                        // 客廳和房間中間的矮牆
   h += box(.35, 9.35, .5, .5, .5, '#C98F6A', '#B97E59', '#A96F4C');
   { const [px, py] = ISO(.6, 9.6, 1.2); h += `<circle cx="${px}" cy="${py - 4}" r="7" fill="#86BE7E"/><circle cx="${px + 4}" cy="${py - 8}" r="4.5" fill="#9CCD93"/>`; }
   return h;
@@ -824,12 +836,13 @@ function houseSVG() {
 // 人和貓在客廳走來走去
 let houseRaf = 0;
 function houseWalkable(x, y) {
-  if (x < 1.9 || x > 8.9 || y < 4.7 || y > 9.6) return false;
+  if (x < 1.9 || x > 9.6 || y < 4.7 || y > 9.6) return false;
+  if (x > 5.0 && x < 5.9 && y > 5.3) return false;                                           // 矮牆（門口在前面 y<5.3）
+  if (x > 6.8 && x < 9.7 && y < 7.5) return false;                                           // 床
   if (x > TABLE[0] - .5 && x < TABLE[0] + TABLE[2] + .3 && y > TABLE[1] - .4 && y < TABLE[1] + TABLE[3] + .4) return false;
-  if (x > 8.6 && y > 5.3 && y < 7.7) return false;                                           // 書櫃
   return !db.zones.some(z => z.spot && z.spot[0] === 'f' && SPOTS[z.spot] && Math.hypot(SPOTS[z.spot][0] - x, SPOTS[z.spot][1] - y) < .8);
 }
-function houseSpot() { for (let i = 0; i < 80; i++) { const x = 2 + Math.random() * 6.8, y = 4.8 + Math.random() * 4.7; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
+function houseSpot() { for (let i = 0; i < 80; i++) { const x = 2 + Math.random() * 7.5, y = 4.8 + Math.random() * 4.7; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
 function startHouse() {
   cancelAnimationFrame(houseRaf);
   const movers = [['mv-ben', 2.6, 8.4, .55, .62], ['mv-sarah', 5.6, 8.6, .55, .62], ['mv-cat', 7.4, 6.6, .9, .5]].map(([id, x, y, speed, size]) => {
