@@ -627,6 +627,8 @@ function renderMonth() {
   const st = cycleStats(), preds = predictions(st), today = ymd(new Date()), evMode = mMode === 'events';
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
+  document.body.classList.toggle('th-period', !evMode);
+  if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#EEF2FD' : '#FDEBF1');
   $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
   $('#m-deco').hidden = !evMode;
   $('#mgrid').classList.toggle('evmode', evMode);
@@ -784,7 +786,7 @@ function openDay(day, edit = false) {
 function showPage(name) {
   ['day', 'month', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.body.className = 'th-' + name;                      // 每個分頁不同顏色
-  const tc = { day: '#E2EEFA', month: '#FBE3EA', stock: '#ECE6F7' }[name];
+  const tc = { day: '#FDF1F5', month: mMode === 'period' ? '#FDEBF1' : '#EEF2FD', stock: '#ECE6F7' }[name];
   document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
   if (name === 'month') { mCur = sel.slice(0, 7); renderMonth(); }
@@ -1020,7 +1022,7 @@ function houseOverlay() {
   const cat = CAT_DO[Math.floor(Date.now() / 600000) % CAT_DO.length], dog = DOG_DO[Math.floor(Date.now() / 600000 + 3) % DOG_DO.length];   // 每 10 分鐘換一件事
   return `<div class="hs-ov tl" id="hs-clock">${houseClock()}</div>
     <button class="hs-ov tr${lows ? ' warn' : ''}" id="hs-low">🔔 ${lows ? `需要補貨 ${lows} 項` : '庫存都夠'}</button>
-    <div class="hs-ov bot hs-fam" id="hs-fam"><small>家人動態</small>
+    <div class="hs-famrow hs-fam" id="hs-fam"><small>家人動態</small>
       <span><i class="dot b"></i>Ben<em>${esc(familyStatus('ben'))}</em></span>
       <span><i class="dot s"></i>Sarah<em>${esc(familyStatus('sarah'))}</em></span>
       <span><i class="dot c"></i>貓<em>${cat}</em></span>
@@ -1033,11 +1035,23 @@ function houseSVG() {
   const zs = db.zones.filter(z => SPOTS[z.spot]);
   let crates = '';
   zs.filter(z => z.spot[0] === 'f').forEach(z => { const [x, y] = SPOTS[z.spot]; crates += box(x - .35, y - .35, .7, .7, .6, '#EDCB94', '#D8AE70', '#C79C5E'); });
-  const bubbles = zs.map(z => {
-    const [x, y, zz] = SPOTS[z.spot], [bx, by] = ISO(x, y, zz + .2);
+  // v0.25 泡泡放在房子外圍（左上、右上、左下、右下四個空角），用虛線連到真正的位置
+  const SLOTS = { TL: [[66, 34], [66, 57], [60, 80]], TR: [[292, 34], [292, 57], [300, 80]], BL: [[62, 200], [62, 224], [140, 236]], BR: [[296, 200], [296, 224], [226, 236]] };
+  const used = { TL: 0, TR: 0, BL: 0, BR: 0 }, place = {};
+  zs.map(z => { const [x, y, zz] = SPOTS[z.spot]; const [ax, ay] = ISO(x, y, zz + .2); return { z, ax, ay }; })
+    .sort((a, b) => a.ay - b.ay).forEach(o => {
+      const L = o.ax < 182, T = o.ay < 104;
+      const pref = [(T ? 'T' : 'B') + (L ? 'L' : 'R'), (T ? 'B' : 'T') + (L ? 'L' : 'R'), (T ? 'T' : 'B') + (L ? 'R' : 'L'), (T ? 'B' : 'T') + (L ? 'R' : 'L')];
+      const r = pref.find(k => used[k] < SLOTS[k].length);
+      place[o.z.id] = r ? { ax: o.ax, ay: o.ay, s: SLOTS[r][used[r]++] } : { ax: o.ax, ay: o.ay, s: [o.ax, o.ay] };
+    });
+  const leaders = zs.map(z => { const p = place[z.id]; if (p.s[0] === p.ax) return '';
+    return `<path class="zl${selZone === z.id ? ' on' : ''}" d="M${p.s[0]} ${p.s[1] - 4} L${p.ax.toFixed(1)} ${p.ay.toFixed(1)}"/><circle class="zd${selZone === z.id ? ' on' : ''}" cx="${p.ax.toFixed(1)}" cy="${p.ay.toFixed(1)}" r="2.6"/>`; }).join('');
+  const bubbles = leaders + zs.map(z => {
+    const [bx, by] = place[z.id].s;
     const items = db.stock.filter(s => s.zone === z.id), lows = items.filter(isLow).length;
     const w = z.name.length * 10.5 + 40;
-    return `<g class="zb${selZone === z.id ? ' on' : ''}${lows ? ' low' : ''}" data-zone="${z.id}" transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
+    return `<g class="zb${selZone === z.id ? ' on' : ''}${lows ? ' low' : ''}" data-zone="${z.id}" transform="translate(${(+bx).toFixed(1)},${(+by).toFixed(1)})">
       <path d="M-4 -6 L0 0 L4 -6Z" class="tip"/><rect x="${-w / 2}" y="-23" width="${w}" height="18" rx="9"/>
       <text x="${-w / 2 + 7}" y="-10.2">${z.icon} ${esc(z.name)}</text>
       <circle cx="${w / 2 - 10}" cy="-14" r="6.4" class="cnt"/><text x="${w / 2 - 10}" y="-10.8" class="n">${lows || items.length}</text></g>`;
@@ -1341,7 +1355,6 @@ function bindStock() {
 }
 
 $('#m-deco').innerHTML = `<svg viewBox="0 0 220 60"><g transform="translate(40,58) scale(.95)">${charBen()}</g><g transform="translate(78,58) scale(.95)">${charSarah()}</g>
-  <path class="heart-beat" d="M59 16 c-3 -5 -10 -3 -9 3 c1 4 9 9 9 9 s8 -5 9 -9 c1 -6 -6 -8 -9 -3z" fill="#F28CA8"/>
   <g transform="translate(140,56) scale(.75)">${charCat('mdecomask')}</g><g transform="translate(185,56) scale(-.7,.7)">${charDog()}</g></svg>`;
 buildHours(); bind(); bindMove(); bindMonth(); bindStock(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
