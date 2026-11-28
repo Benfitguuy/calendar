@@ -427,3 +427,8 @@ body.th-month{--bg:#F8F4E8;--card:#FFFDF7;--line:#EAE2CB;--line2:#F3EEDF;--soft:
 body.th-month.th-period{--bg:#FDEFEA;--card:#FFFAF7;--line:#F3D9D2;--line2:#FAEAE5;--soft:#F6DCD6;--muted:#A88E8A;--hi:#FBE4DD;--hi-bd:#E58E8E}
 .hs-famrow{flex-wrap:wrap;row-gap:3px;column-gap:10px;white-space:normal;overflow:visible}.hs-famrow span{flex:none}.hs-famrow em{max-width:none;overflow:visible}
 .pd-badge{margin-left:4px;padding:1px 6px;border-radius:8px;background:#FCE0E8;color:#B2365A;font-size:10px;font-weight:700}
+
+/* v0.27 粉嫩馬卡龍：今天＝草莓、月曆行事曆＝開心果、月曆經期＝蜜桃、庫存＝薰衣草（不變） */
+body.th-day{--bg:#FCE9EF;--card:#FFF8FA;--line:#F5D4DF;--line2:#FBEAF0;--soft:#F8DCE6;--muted:#A98A96;--hi:#FBE1EA;--hi-bd:#EE8FAE}
+body.th-month{--bg:#E4F4EC;--card:#F7FCF9;--line:#CCE7D8;--line2:#E8F5EE;--soft:#D4ECDF;--muted:#82A091;--hi:#DAF0E3;--hi-bd:#6FBF95}
+body.th-month.th-period{--bg:#FDEAE1;--card:#FFF8F4;--line:#F5D3C3;--line2:#FBEAE2;--soft:#F8DACB;--muted:#A98D80;--hi:#FCE1D4;--hi-bd:#EF9A7A}
