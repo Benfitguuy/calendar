@@ -678,7 +678,8 @@ function renderMonth() {
   document.querySelectorAll('.mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === mMode));
   $('#cycle-card').hidden = evMode;
   document.body.classList.toggle('th-period', !evMode);
-  if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#E4F4EC' : '#FDEAE1');
+  document.body.classList.toggle('th-week', wkMode);                 // v0.32 週曆自己的顏色
+  if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', wkMode ? '#E3EEFA' : evMode ? '#E4F4EC' : '#FDEAE1');
   $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
   $('#m-deco').hidden = true;                    // v0.29 Sarah：月曆下面不要人物貓狗
   $('#mgrid').classList.toggle('evmode', evMode && !wkMode); $('#mgrid').classList.toggle('wkmode', wkMode);
@@ -897,7 +898,7 @@ function openDay(day, edit = false) {
 function showPage(name) {
   ['day', 'month', 'stock'].forEach(n => $('#page-' + n).hidden = n !== name);
   document.body.className = 'th-' + name;                      // 每個分頁不同顏色
-  const tc = { day: '#FCE9EF', month: mMode === 'period' ? '#FDEAE1' : '#E4F4EC', stock: '#ECE6F7' }[name];
+  const tc = { day: '#FCE9EF', month: mMode === 'period' ? '#FDEAE1' : mMode === 'week' ? '#E3EEFA' : '#E4F4EC', stock: '#ECE6F7' }[name];
   if (name === 'month') wCur = mondayOf(sel);
   document.querySelector('meta[name=theme-color]').setAttribute('content', tc);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.page === name));
