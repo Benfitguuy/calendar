@@ -720,9 +720,9 @@ const fmtQty = n => Math.round(n * 100) / 100;
 // ---------- v0.17 庫存區域＋小房子（參考 HomeStock，Adam 原創 SVG） ----------
 // db.zones：[{ id, name, icon, spot }]；spot＝房子裡的位置（fridge/counter/sink/shower 是家具，f1–f5 是地上的紙箱）
 // db.stock 每一項多一個 zone（區域 id，'' ＝未分區）
-const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], toilet: [7.7, .9, 1.4], bed: [8.3, 5.4, .8],
-  f1: [2.4, 5.0, .6], f2: [6.4, 8.6, .6], f3: [8.8, 9.0, .6], f4: [4.4, 9.4, .6], f5: [2.2, 9.2, .6] };
-const ZICONS = ['🧊', '🍳', '🚽', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
+const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], pantry: [.6, 3.3, 1.9], toilet: [8.0, 1.2, 1.5], bed: [1.8, 7.3, .8],
+  f1: [2.4, 4.8, .6], f2: [5.6, 9.2, .6], f3: [9.2, 9.1, .6], f4: [3.9, 9.3, .6], f5: [8.9, 6.0, .6] };
+const ZICONS = ['🧊', '🍳', '🥫', '🛁', '🚽', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
 if (!db.zones) {
   db.zones = [{ id: 'z-fridge', name: '冰箱', icon: '🧊', spot: 'fridge' }, { id: 'z-counter', name: '流理臺', icon: '🍳', spot: 'counter' },
     { id: 'z-sink', name: '洗手台', icon: '🚰', spot: 'sink' }, { id: 'z-shower', name: '淋浴間', icon: '🚿', spot: 'shower' }];
@@ -740,6 +740,15 @@ if ((db.zoneV || 1) < 2) {
   if (!db.zones.some(z => z.spot === 'bed')) db.zones.push({ id: 'z-room', name: '房間', icon: '🛏️', spot: 'bed' });
   db.zones.forEach(z => { if (z.spot && !SPOTS[z.spot]) z.spot = ''; });
   db.zoneV = 2; save();
+}
+if ((db.zoneV || 1) < 3) {
+  const wc = db.zones.find(z => z.spot === 'toilet');
+  if (wc && wc.name === '廁所') Object.assign(wc, { name: '浴室廁所', icon: '🛁' });
+  if (!db.zones.some(z => z.spot === 'pantry')) {
+    const pz = { id: 'z-pantry', name: '儲藏櫃', icon: '🥫', spot: 'pantry' }; db.zones.push(pz);
+    db.stock.forEach(s => { if ((!db.zones.some(z => z.id === s.zone) || s.zone === 'z-counter') && /泡麵|麵|醬|鹽|糖|胡椒|調味|罐頭|醋|味精/.test(s.name)) s.zone = pz.id; });
+  }
+  db.zoneV = 3; save();
 }
 let selZone = '';                       // '' ＝全部；'_none' ＝未分區；其他＝區域 id
 const zoneOf = id => db.zones.find(z => z.id === id);
@@ -760,56 +769,67 @@ function tiles(x0, y0, x1, y1, a, b) {
   return h;
 }
 function houseStatic() {
+  // v0.20 格局：後左＝廚房（冰箱、流理臺、儲藏櫃）、後右＝浴室廁所（浴缸＋馬桶）、前左＝房間（離浴室最遠）、前右＝客廳
   let h = '';
   h += box(-1.2, -1.2, 12.4, 12.4, .3, '#BFDDA6', '#A3C98B', '#93BB7C', -.7);                    // 草地
   h += box(0, 0, 10, 10, .4, '#E9C99B', '#C9A77A', '#B8966A', -.4);                                // 地板
   h += tiles(0, 0, 5, 4, '#F6E3C9', '#FBEFDF') + tiles(5, 0, 10, 4, '#D4E8F1', '#EEF6FA');         // 廚房、浴室地磚
   for (let y = 4.5; y < 10; y += 1) h += `<polyline points="${P([[0, y], [10, y]])}" stroke="#DDB989" stroke-width=".8" fill="none"/>`;
-  h += poly([[2.0, 5.5], [5.1, 5.5], [5.1, 8.8], [2.0, 8.8]], '#F7D88F', 'opacity=".85"');         // 地毯
+  h += poly([[0, 5.55], [4.7, 5.55], [4.7, 10], [0, 10]], '#F2DDC0');                                // 房間地板
+  h += poly([[1.0, 8.95], [4.3, 8.95], [4.3, 9.8], [1.0, 9.8]], '#F6D6DC', 'opacity=".9"');          // 房間地毯
+  h += poly([[5.8, 5.7], [9.6, 5.7], [9.6, 8.4], [5.8, 8.4]], '#F7D88F', 'opacity=".85"');           // 客廳地毯
   // 後面兩道牆＋窗
   h += poly([[0, 0, 0], [5, 0, 0], [5, 0, 3], [0, 0, 3]], '#F6E7D6') + poly([[5, 0, 0], [10, 0, 0], [10, 0, 3], [5, 0, 3]], '#E2EEF4');
-  h += poly([[0, 0, 0], [0, 10, 0], [0, 10, 3], [0, 0, 3]], '#F3DCCB');
+  h += poly([[0, 0, 0], [0, 5.5, 0], [0, 5.5, 3], [0, 0, 3]], '#F6E7D6') + poly([[0, 5.5, 0], [0, 10, 0], [0, 10, 3], [0, 5.5, 3]], '#F1DCE3');
   h += poly([[-.3, -.3, 3], [10, -.3, 3], [10, 0, 3], [0, 0, 3], [0, 10, 3], [-.3, 10, 3]], '#CDB8A4');
   const win = (a, fill = '#BFE0F2') => poly(a, fill, 'stroke="#fff" stroke-width="2"');
-  h += win([[2.2, 0, 1.7], [3.6, 0, 1.7], [3.6, 0, 2.7], [2.2, 0, 2.7]]) + win([[7, 0, 1.8], [7.9, 0, 1.8], [7.9, 0, 2.7], [7, 0, 2.7]]);
-  h += win([[0, 5.6, 1.2], [0, 7.6, 1.2], [0, 7.6, 2.5], [0, 5.6, 2.5]]);
-  h += poly([[0, 8.6, 1.6], [0, 9.4, 1.6], [0, 9.4, 2.4], [0, 8.6, 2.4]], '#F2A7B5', 'stroke="#fff" stroke-width="1.5"');   // 牆上的畫
-  // 冰箱
+  h += win([[2.2, 0, 1.7], [3.6, 0, 1.7], [3.6, 0, 2.7], [2.2, 0, 2.7]]) + win([[6.6, 0, 1.8], [7.6, 0, 1.8], [7.6, 0, 2.7], [6.6, 0, 2.7]]);
+  h += win([[0, 8.8, 1.3], [0, 9.7, 1.3], [0, 9.7, 2.5], [0, 8.8, 2.5]]);
+  h += poly([[0, 6.6, 1.7], [0, 7.8, 1.7], [0, 7.8, 2.5], [0, 6.6, 2.5]], '#F2A7B5', 'stroke="#fff" stroke-width="1.5"');   // 床頭上的畫
+  // 廚房：冰箱
   h += box(.15, .2, 1.3, 1.2, 2.8, '#C6ECE1', '#8FD1C1', '#7BC0B0');
   h += `<polyline points="${P([[.15, 1.41, 1.9], [1.45, 1.41, 1.9]])}" stroke="#6FB2A2" stroke-width="1" fill="none"/>`;
   h += `<polyline points="${P([[1.2, 1.42, 1.1], [1.2, 1.42, 1.7]])} ${P([[1.2, 1.42, 2.1], [1.2, 1.42, 2.6]])}" stroke="#fff" stroke-width="1.4" stroke-linecap="round" fill="none"/>`;
+  // 廚房：儲藏櫃（調味料、泡麵）— 靠左牆、冰箱前面
+  h += box(.15, 1.6, .95, 1.8, 2.4, '#EBD3B4', '#D9B78C', '#C9A57A');
+  h += `<polyline points="${P([[1.11, 2.5, .1], [1.11, 2.5, 2.3]])}" stroke="#B48E62" stroke-width="1" fill="none"/>`;
+  h += `<polyline points="${P([[1.11, 1.6, 1.2], [1.11, 3.4, 1.2]])}" stroke="#B48E62" stroke-width="1" fill="none"/>`;
+  [[2.3, 1.5], [2.7, 1.5], [2.3, 1.9], [2.7, 1.9]].forEach(([y, z]) => h += `<polyline points="${P([[1.11, y, z], [1.11, y, z + .3]])}" stroke="#fff" stroke-width="1.4" stroke-linecap="round" fill="none"/>`);
+  { [[.55, 2.0, '#E9776B'], [.6, 2.45, '#F2C14E'], [.55, 2.9, '#7FB07A']].forEach(([x, y, c]) => h += box(x - .12, y - .12, .24, .24, .32, c, c, c, 2.4)); }   // 櫃子上的調味罐
   // 流理臺（水槽＋爐子）
   h += box(1.6, .15, 3.1, 1.1, 1.25, '#FFFFFF', '#ECCDA5', '#DBB88C');
   h += poly([[1.9, .35, 1.26], [2.8, .35, 1.26], [2.8, 1.05, 1.26], [1.9, 1.05, 1.26]], '#C9DEE9');
   h += poly([[3.3, .35, 1.26], [4.4, .35, 1.26], [4.4, 1.05, 1.26], [3.3, 1.05, 1.26]], '#4A3A3F', 'opacity=".75"');
   [[3.6, .7], [4.1, .7]].forEach(([x, y]) => { const [cx, cy] = ISO(x, y, 1.27); h += `<ellipse cx="${cx}" cy="${cy}" rx="3.4" ry="1.7" fill="none" stroke="#F2A7B5" stroke-width="1"/>`; });
   [2.3, 3.4].forEach(x => h += `<polyline points="${P([[x, 1.26, .3], [x, 1.26, 1]])}" stroke="#C9A97E" stroke-width="1" fill="none"/>`);
-  // 廚房和浴室中間的矮牆、浴室和客廳中間的矮牆
+  // 廚房和浴室中間的矮牆
   h += box(4.9, 0, .2, 2.8, 1.6, '#CDB8A4', '#EADFD3', '#F1E6DA');
-  // 廁所（v0.18：拿掉洗手台和淋浴間，只留馬桶）
-  h += poly([[6.4, .9], [8.9, .9], [8.9, 2.4], [6.4, 2.4]], '#B9D9E8', 'opacity=".55"');                 // 腳踏墊
-  h += box(7.15, .15, 1.1, .4, 1.45, '#FFFFFF', '#EEF3F6', '#DCE5EA') + box(7.25, .55, .9, 1, .7, '#FFFFFF', '#F2F6F8', '#DCE5EA');
-  h += poly([[7.4, .7, .71], [8.0, .7, .71], [8.0, 1.4, .71], [7.4, 1.4, .71]], '#D6E6EE');
-  h += poly([[5.6, 0, 1.7], [6.4, 0, 1.7], [6.4, 0, 2.1], [5.6, 0, 2.1]], '#F2B8C2');                     // 毛巾
-  h += box(9.2, .15, .65, .6, 1.1, '#F4F8FA', '#D9E6EC', '#C7D8E0');                                       // 小櫃子
-  h += box(6.2, 3.9, 3.8, .2, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');
-  // 客廳：沙發、盆栽、書櫃
-  h += box(.15, 5.2, 1.2, 3.2, .7, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 5.2, .4, 3.2, 1.45, '#8CC3B3', '#73AE9E', '#65A090');
-  h += box(.15, 5.0, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 8.3, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090');
-  // 房間（v0.18）：木地板換淺色、床、床頭櫃
-  h += poly([[5.5, 4.1], [10, 4.1], [10, 10], [5.5, 10]], '#F2DDC0');
-  h += poly([[6.2, 7.6], [9.6, 7.6], [9.6, 9.4], [6.2, 9.4]], '#F6D6DC', 'opacity=".9"');
-  h += box(7.1, 4.15, 2.3, .3, 1.25, '#C9B0D9', '#B79BC9', '#A88BBB');                                    // 床頭板
-  h += box(7.1, 4.45, 2.3, 2.7, .55, '#FFFFFF', '#E3D7EC', '#D6C7E2');
-  h += box(7.1, 5.6, 2.3, 1.55, .58, '#C7B2DE', '#B39BCF', '#A58DC2');                                      // 被子
-  h += box(7.35, 4.6, .9, .6, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8') + box(8.35, 4.6, .9, .6, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8');
-  h += box(9.55, 4.2, .4, .45, .65, '#EBD3B4', '#D4B48C', '#C4A37A');
-  h += box(5.3, 5.5, .2, 4.5, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');                                        // 客廳和房間中間的矮牆
-  h += box(.35, 9.35, .5, .5, .5, '#C98F6A', '#B97E59', '#A96F4C');
-  { const [px, py] = ISO(.6, 9.6, 1.2); h += `<circle cx="${px}" cy="${py - 4}" r="7" fill="#86BE7E"/><circle cx="${px + 4}" cy="${py - 8}" r="4.5" fill="#9CCD93"/>`; }
+  // 浴室廁所：馬桶＋浴缸＋毛巾
+  h += poly([[5.6, 1.6], [7.9, 1.6], [7.9, 2.8], [5.6, 2.8]], '#B9D9E8', 'opacity=".55"');                 // 腳踏墊
+  h += box(6.0, .15, 1.1, .4, 1.45, '#FFFFFF', '#EEF3F6', '#DCE5EA') + box(6.1, .55, .9, 1, .7, '#FFFFFF', '#F2F6F8', '#DCE5EA');
+  h += poly([[6.25, .7, .71], [6.85, .7, .71], [6.85, 1.4, .71], [6.25, 1.4, .71]], '#D6E6EE');
+  h += box(8.2, .15, 1.7, 2.7, .85, '#FFFFFF', '#EEF3F6', '#DCE5EA');                                     // 浴缸
+  h += poly([[8.4, .35, .86], [9.7, .35, .86], [9.7, 2.65, .86], [8.4, 2.65, .86]], '#A9D3EA');
+  h += `<polyline points="${P([[8.8, .9, .87], [9.3, .9, .87]])} " stroke="#E6F4FA" stroke-width="1.5" stroke-linecap="round" fill="none"/>`;
+  h += `<polyline points="${P([[9.0, 0, 2.2], [9.0, .4, 2.0]])}" stroke="#9FB6C4" stroke-width="2" stroke-linecap="round" fill="none"/>`;   // 水龍頭
+  h += poly([[7.4, 0, 1.7], [8.0, 0, 1.7], [8.0, 0, 2.2], [7.4, 0, 2.2]], '#F2B8C2');                     // 毛巾
+  h += box(6.2, 3.9, 3.8, .2, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');                                     // 浴室和客廳中間的牆
+  // 房間（前左，離浴室最遠）：矮牆、床、床頭櫃
+  h += box(0, 5.45, 3.4, .2, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');                                       // 走道和房間中間（門在右邊）
+  h += box(.15, 6.1, .3, 2.5, 1.25, '#C9B0D9', '#B79BC9', '#A88BBB');                                    // 床頭板
+  h += box(.45, 6.1, 2.6, 2.5, .55, '#FFFFFF', '#E3D7EC', '#D6C7E2');
+  h += box(1.4, 6.1, 1.65, 2.5, .58, '#C7B2DE', '#B39BCF', '#A58DC2');                                    // 被子
+  h += box(.55, 6.3, .6, .95, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8') + box(.55, 7.45, .6, .95, .7, '#FFF8F0', '#F1E6DA', '#E6D8C8');
+  h += box(.15, 8.75, .5, .5, .65, '#EBD3B4', '#D4B48C', '#C4A37A');
+  // 客廳（前右）：沙發靠浴室那道牆、盆栽
+  h += box(6.4, 4.15, 3.2, 1.1, .7, '#8CC3B3', '#73AE9E', '#65A090') + box(6.4, 4.15, 3.2, .4, 1.45, '#8CC3B3', '#73AE9E', '#65A090');
+  h += box(6.1, 4.15, .3, 1.2, 1, '#8CC3B3', '#73AE9E', '#65A090') + box(9.6, 4.15, .3, 1.2, 1, '#8CC3B3', '#73AE9E', '#65A090');
+  h += box(5.3, 4.25, .5, .5, .5, '#C98F6A', '#B97E59', '#A96F4C');
+  { const [px, py] = ISO(5.55, 4.5, 1.2); h += `<circle cx="${px}" cy="${py - 4}" r="7" fill="#86BE7E"/><circle cx="${px + 4}" cy="${py - 8}" r="4.5" fill="#9CCD93"/>`; }
+  h += box(4.6, 5.55, .2, 4.45, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');                                    // 房間和客廳中間（最後畫，在前面）
   return h;
 }
-const TABLE = [3.4, 6.4, 1.6, 1.1];        // 茶几（人物會繞過、前後遮擋要排序）
+const TABLE = [7.1, 6.3, 1.6, 1.0];        // 茶几（人物會繞過、前後遮擋要排序）
 function houseSVG() {
   const zs = db.zones.filter(z => SPOTS[z.spot]);
   let crates = '';
@@ -836,13 +856,16 @@ function houseSVG() {
 // 人和貓在客廳走來走去
 let houseRaf = 0;
 function houseWalkable(x, y) {
-  if (x < 1.9 || x > 9.6 || y < 4.7 || y > 9.6) return false;
-  if (x > 5.0 && x < 5.9 && y > 5.3) return false;                                           // 矮牆（門口在前面 y<5.3）
-  if (x > 6.8 && x < 9.7 && y < 7.5) return false;                                           // 床
+  if (x < .5 || x > 9.6 || y < 4.35 || y > 9.6) return false;
+  if (y > 5.3 && y < 5.8 && x < 3.5) return false;                                           // 房間上面的矮牆（門在 x 3.5–4.6）
+  if (x > 4.45 && x < 4.95 && y > 5.4) return false;                                         // 房間和客廳中間的牆
+  if (x < 3.3 && y > 5.9 && y < 9.4) return false;                                           // 床、床頭櫃
+  if (x > 5.0 && x < 6.0 && y < 4.9) return false;                                           // 盆栽
+  if (x > 5.9 && y < 5.5) return false;                                                      // 沙發
   if (x > TABLE[0] - .5 && x < TABLE[0] + TABLE[2] + .3 && y > TABLE[1] - .4 && y < TABLE[1] + TABLE[3] + .4) return false;
   return !db.zones.some(z => z.spot && z.spot[0] === 'f' && SPOTS[z.spot] && Math.hypot(SPOTS[z.spot][0] - x, SPOTS[z.spot][1] - y) < .8);
 }
-function houseSpot() { for (let i = 0; i < 80; i++) { const x = 2 + Math.random() * 7.5, y = 4.8 + Math.random() * 4.7; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
+function houseSpot() { for (let i = 0; i < 80; i++) { const x = .5 + Math.random() * 9.1, y = 4.4 + Math.random() * 5.2; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
 function startHouse() {
   cancelAnimationFrame(houseRaf);
   const movers = [['mv-ben', 2.6, 8.4, .55, .62], ['mv-sarah', 5.6, 8.6, .55, .62], ['mv-cat', 7.4, 6.6, .9, .5]].map(([id, x, y, speed, size]) => {
