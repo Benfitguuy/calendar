@@ -81,9 +81,12 @@ function cardReminders(day) {
   if (!w || !Array.isArray(w.accounts)) return [];
   const d = parseYmd(day), dn = d.getDate(), last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   const hit = n => +n > 0 && (+n === dn || (+n > last && dn === last));          // 31 號繳費、這個月只有 30 天 → 30 號提醒
+  const sdOf = (n, y, mo) => ymd(new Date(y, mo, Math.min(n, new Date(y, mo + 1, 0).getDate())));
   const out = [];
   w.accounts.filter(a => a.type === 'credit').forEach(a => {
-    if (hit(a.payDay)) out.push({ kind: 'pay', title: `💳 ${a.name} 繳費`, short: `${a.name} 繳費` });
+    // 錢包 v2.6：payMode 'free'＝最長免息幾天 → 繳費日＝上一次結算日＋免息天數
+    const isPay = a.payMode === 'free' ? (+a.freeDays > 0 && +a.statementDay > 0 && (() => { const p = parseYmd(addDays(day, -(+a.freeDays))); return sdOf(+a.statementDay, p.getFullYear(), p.getMonth()) === ymd(p); })()) : hit(a.payDay);
+    if (isPay) out.push({ kind: 'pay', title: `💳 ${a.name} 繳費`, short: `${a.name} 繳費` });
     if (hit(a.statementDay)) out.push({ kind: 'stmt', title: `🧾 ${a.name} 結算`, short: `${a.name} 結算` });
   });
   return out;
@@ -682,7 +685,7 @@ function renderMonth() {
   $('#legend').innerHTML = evMode
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
     : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>💧量</span><span>🤕症狀</span><span>🫧分泌物</span><span>💩大便</span><span>❤️親密</span><span>📝備註</span>';
-  $('#m-hint').textContent = wkMode ? '左右滑可以換週。點一天可以看、也可以新增行程；每天、平日重複的（例如起床）不顯示。' : evMode
+  $('#m-hint').textContent = wkMode ? '左右滑可以換週，或點上面小月曆的日期跳到那週。點一欄可以看、也可以新增行程；每天、平日重複的（例如起床）不顯示。' : evMode
     ? '左右滑可以換月份。點日期可以看、也可以新增行程。整天和好幾天的行程（例如旅行）會變成一條色條；每天、平日重複的（例如起床）不顯示。'
     : '左右滑可以換月份。點一下日期記錄經期和身體狀況；這些紀錄只存在這支手機，不會給別人看到。';
   if (!evMode) renderCycleCard(st, preds);
@@ -742,17 +745,28 @@ function monthWeeks(start, cells, today) {
   return h;
 }
 
-// v0.30 週檢視
+// v0.31 週檢視：上面小月曆，下面七天並排七欄
 function weekList(ws, today) {
-  return Array.from({ length: 7 }, (_, i) => addDays(ws, i)).map(day => {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+  // 小月曆：顯示這週所在的月份（這週跨月時，以星期四那天的月份為準）
+  const ref = parseYmd(days[3]), y = ref.getFullYear(), m = ref.getMonth();
+  const first = new Date(y, m, 1), st = addDays(ymd(first), -monOffset(first)), n = Math.ceil((monOffset(first) + new Date(y, m + 1, 0).getDate()) / 7) * 7;
+  let mini = `<div class="wmini"><div class="wmini-h"><button class="wm-nav" data-wm="-1" aria-label="上個月">‹</button><b>${y}年${m + 1}月</b><button class="wm-nav" data-wm="1" aria-label="下個月">›</button></div><div class="wmini-g">`
+    + WEEK_MON.split('').map(c => `<span class="wm-w">${c}</span>`).join('');
+  for (let i = 0; i < n; i++) {
+    const d = addDays(st, i), has = allDayOn(d).length || db.events.some(e => !e.allDay && !e.ghost && e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, d));
+    mini += `<button class="wm-d${parseYmd(d).getMonth() !== m ? ' out' : ''}${d >= ws && d <= days[6] ? ' inwk' : ''}${d === today ? ' today' : ''}" data-wday="${d}">${parseYmd(d).getDate()}${has ? '<i></i>' : ''}</button>`;
+  }
+  mini += '</div></div>';
+  const cols = days.map(day => {
     const d = parseYmd(day), ad = allDayOn(day), cards = cardReminders(day);
     const evs = db.events.filter(e => !e.allDay && !e.ghost && e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
-    const chips = ad.map(e => `<span class="adc ${e.owner}">${e.owner === 'both' ? '♥ ' : ''}${esc(e.title)}${isMulti(e) ? `<small>${diffDays(e.date, day) + 1}/${diffDays(e.date, e.endDate) + 1}</small>` : ''}</span>`).join('')
-      + cards.map(c => `<span class="adc card-${c.kind}">${esc(c.title)}</span>`).join('');
-    const rows = evs.map(e => `<span class="wrow ${e.owner}"><b>${e.start}${e.end ? '–' + e.end : ''}</b>${e.owner === 'both' ? '♥ ' : ''}${esc(e.title)}</span>`).join('');
-    return `<button class="wday${day === today ? ' today' : ''}${d.getDay() % 6 === 0 ? ' wkend' : ''}" data-day="${day}"><span class="wdate"><small>週${WEEK[d.getDay()]}</small><b>${d.getDate()}</b></span>
-      <span class="wbody">${chips ? `<span class="wchips">${chips}</span>` : ''}${rows || (chips ? '' : '<span class="wempty">沒有行程</span>')}</span></button>`;
+    return `<button class="wcol${day === today ? ' today' : ''}${d.getDay() % 6 === 0 ? ' wkend' : ''}" data-day="${day}">
+      <span class="wc-h"><small>${WEEK[d.getDay()]}</small><b>${d.getDate()}</b></span>
+      ${ad.map(e => `<span class="wc-ad ${e.owner}">${esc(e.title)}</span>`).join('')}${cards.map(c => `<span class="wc-ad card-${c.kind}">${esc(c.short || c.title)}</span>`).join('')}
+      ${evs.map(e => `<span class="wc-ev ${e.owner}"><em>${e.start}</em>${esc(e.title)}</span>`).join('')}</button>`;
   }).join('');
+  return mini + `<div class="wcols">${cols}</div>`;
 }
 
 function startPeriod(day, st) {
@@ -917,7 +931,10 @@ function bindMonth() {
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) slideMonth(dx < 0 ? 1 : -1);
   });
   $('#m-today').onclick = () => { mCur = ymd(new Date()).slice(0, 7); wCur = mondayOf(ymd(new Date())); renderMonth(); };
-  $('#mgrid').addEventListener('click', e => { const b = e.target.closest('.mday,.wday'); if (b) openDay(b.dataset.day); });
+  $('#mgrid').addEventListener('click', e => {
+    const nav = e.target.closest('[data-wm]'); if (nav) { const r = parseYmd(addDays(wCur, 3)); wCur = mondayOf(ymd(new Date(r.getFullYear(), r.getMonth() + +nav.dataset.wm, 1))); return renderMonth(); }
+    const w = e.target.closest('[data-wday]'); if (w) { wCur = mondayOf(w.dataset.wday); return renderMonth(); }
+    const b = e.target.closest('.mday,.wday,.wcol'); if (b) openDay(b.dataset.day); });
   document.querySelectorAll('.mtabs button').forEach(b => b.onclick = () => {
     mMode = b.dataset.mode; try { localStorage.setItem('our-calendar-mmode', mMode); } catch (e) { }
     renderMonth();
