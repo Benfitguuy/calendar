@@ -717,9 +717,202 @@ let stockTab = 'stock';
 const isLow = s => s.qty <= s.low;
 const fmtQty = n => Math.round(n * 100) / 100;
 
+// ---------- v0.17 庫存區域＋小房子（參考 HomeStock，Adam 原創 SVG） ----------
+// db.zones：[{ id, name, icon, spot }]；spot＝房子裡的位置（fridge/counter/sink/shower 是家具，f1–f5 是地上的紙箱）
+// db.stock 每一項多一個 zone（區域 id，'' ＝未分區）
+const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], sink: [6.2, 0.65, 1.3], shower: [9.4, 2.2, 1.6],
+  f1: [2.4, 5.0, .6], f2: [7.6, 5.4, .6], f3: [8.6, 8.8, .6], f4: [5.6, 9.3, .6], f5: [2.2, 9.2, .6] };
+const ZICONS = ['🧊', '🍳', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
+if (!db.zones) {
+  db.zones = [{ id: 'z-fridge', name: '冰箱', icon: '🧊', spot: 'fridge' }, { id: 'z-counter', name: '流理臺', icon: '🍳', spot: 'counter' },
+    { id: 'z-sink', name: '洗手台', icon: '🚰', spot: 'sink' }, { id: 'z-shower', name: '淋浴間', icon: '🚿', spot: 'shower' }];
+  const guess = n => /蛋|奶|起司|乳酪|肉|火腿|菜|果|優格/.test(n) ? 'z-fridge' : /洗髮|沐浴|潤髮/.test(n) ? 'z-shower'
+    : /牙|洗手|洗面|刮鬍|衛生紙/.test(n) ? 'z-sink' : /米|麵|油|鹽|糖|醬|洗碗|菜瓜布/.test(n) ? 'z-counter' : '';
+  db.stock.forEach(s => { if (s.zone === undefined) s.zone = guess(s.name); });
+  save();
+}
+let selZone = '';                       // '' ＝全部；'_none' ＝未分區；其他＝區域 id
+const zoneOf = id => db.zones.find(z => z.id === id);
+const inZone = (s, z) => z === '' ? true : z === '_none' ? !zoneOf(s.zone) : s.zone === z;
+
+// 等角投影：房間 10×10 格，牆高 3
+const ISO = (x, y, z = 0) => [180 + (x - y) * 15, 58 + (x + y) * 7.5 - z * 13];
+const P = a => a.map(p => ISO(...p).map(n => n.toFixed(1)).join(',')).join(' ');
+const poly = (a, fill, extra = '') => `<polygon points="${P(a)}" fill="${fill}" ${extra}/>`;
+function box(x, y, w, d, h, top, left, right, z0 = 0) {
+  return poly([[x, y + d, z0], [x + w, y + d, z0], [x + w, y + d, z0 + h], [x, y + d, z0 + h]], left) +
+    poly([[x + w, y, z0], [x + w, y + d, z0], [x + w, y + d, z0 + h], [x + w, y, z0 + h]], right) +
+    poly([[x, y, z0 + h], [x + w, y, z0 + h], [x + w, y + d, z0 + h], [x, y + d, z0 + h]], top);
+}
+function tiles(x0, y0, x1, y1, a, b) {
+  let h = '';
+  for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++) h += poly([[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]], (x + y) % 2 ? a : b);
+  return h;
+}
+function houseStatic() {
+  let h = '';
+  h += box(-1.2, -1.2, 12.4, 12.4, .3, '#BFDDA6', '#A3C98B', '#93BB7C', -.7);                    // 草地
+  h += box(0, 0, 10, 10, .4, '#E9C99B', '#C9A77A', '#B8966A', -.4);                                // 地板
+  h += tiles(0, 0, 5, 4, '#F6E3C9', '#FBEFDF') + tiles(5, 0, 10, 4, '#D4E8F1', '#EEF6FA');         // 廚房、浴室地磚
+  for (let y = 4.5; y < 10; y += 1) h += `<polyline points="${P([[0, y], [10, y]])}" stroke="#DDB989" stroke-width=".8" fill="none"/>`;
+  h += poly([[2.1, 5.4], [6.6, 5.4], [6.6, 8.8], [2.1, 8.8]], '#F7D88F', 'opacity=".85"');         // 地毯
+  // 後面兩道牆＋窗
+  h += poly([[0, 0, 0], [5, 0, 0], [5, 0, 3], [0, 0, 3]], '#F6E7D6') + poly([[5, 0, 0], [10, 0, 0], [10, 0, 3], [5, 0, 3]], '#E2EEF4');
+  h += poly([[0, 0, 0], [0, 10, 0], [0, 10, 3], [0, 0, 3]], '#F3DCCB');
+  h += poly([[-.3, -.3, 3], [10, -.3, 3], [10, 0, 3], [0, 0, 3], [0, 10, 3], [-.3, 10, 3]], '#CDB8A4');
+  const win = (a, fill = '#BFE0F2') => poly(a, fill, 'stroke="#fff" stroke-width="2"');
+  h += win([[2.2, 0, 1.7], [3.6, 0, 1.7], [3.6, 0, 2.7], [2.2, 0, 2.7]]) + win([[7, 0, 1.8], [7.9, 0, 1.8], [7.9, 0, 2.7], [7, 0, 2.7]]);
+  h += win([[0, 5.6, 1.2], [0, 7.6, 1.2], [0, 7.6, 2.5], [0, 5.6, 2.5]]);
+  h += poly([[0, 8.6, 1.6], [0, 9.4, 1.6], [0, 9.4, 2.4], [0, 8.6, 2.4]], '#F2A7B5', 'stroke="#fff" stroke-width="1.5"');   // 牆上的畫
+  // 冰箱
+  h += box(.15, .2, 1.3, 1.2, 2.8, '#C6ECE1', '#8FD1C1', '#7BC0B0');
+  h += `<polyline points="${P([[.15, 1.41, 1.9], [1.45, 1.41, 1.9]])}" stroke="#6FB2A2" stroke-width="1" fill="none"/>`;
+  h += `<polyline points="${P([[1.2, 1.42, 1.1], [1.2, 1.42, 1.7]])} ${P([[1.2, 1.42, 2.1], [1.2, 1.42, 2.6]])}" stroke="#fff" stroke-width="1.4" stroke-linecap="round" fill="none"/>`;
+  // 流理臺（水槽＋爐子）
+  h += box(1.6, .15, 3.1, 1.1, 1.25, '#FFFFFF', '#ECCDA5', '#DBB88C');
+  h += poly([[1.9, .35, 1.26], [2.8, .35, 1.26], [2.8, 1.05, 1.26], [1.9, 1.05, 1.26]], '#C9DEE9');
+  h += poly([[3.3, .35, 1.26], [4.4, .35, 1.26], [4.4, 1.05, 1.26], [3.3, 1.05, 1.26]], '#4A3A3F', 'opacity=".75"');
+  [[3.6, .7], [4.1, .7]].forEach(([x, y]) => { const [cx, cy] = ISO(x, y, 1.27); h += `<ellipse cx="${cx}" cy="${cy}" rx="3.4" ry="1.7" fill="none" stroke="#F2A7B5" stroke-width="1"/>`; });
+  [2.3, 3.4].forEach(x => h += `<polyline points="${P([[x, 1.26, .3], [x, 1.26, 1]])}" stroke="#C9A97E" stroke-width="1" fill="none"/>`);
+  // 廚房和浴室中間的矮牆、浴室和客廳中間的矮牆
+  h += box(4.9, 0, .2, 2.8, 1.6, '#CDB8A4', '#EADFD3', '#F1E6DA');
+  // 洗手台＋鏡子
+  h += poly([[5.7, 0, 1.75], [6.8, 0, 1.75], [6.8, 0, 2.7], [5.7, 0, 2.7]], '#EAF6FC', 'stroke="#B6CFDD" stroke-width="1.5"');
+  h += box(5.5, .15, 1.5, 1, 1.3, '#FFFFFF', '#CFE1EC', '#B9D0DE');
+  h += poly([[5.85, .35, 1.31], [6.65, .35, 1.31], [6.65, .95, 1.31], [5.85, .95, 1.31]], '#BFDDEB');
+  // 馬桶
+  h += box(7.3, .15, .8, .3, 1.15, '#fff', '#EEF3F6', '#DDE6EB') + box(7.35, .45, .7, .75, .6, '#fff', '#F1F5F8', '#DDE6EB');
+  // 淋浴間（玻璃）
+  h += box(8.15, .15, 1.75, 1.9, .12, '#DCEBF2', '#C3D7E2', '#B5CCD8');
+  h += `<polyline points="${P([[9.4, 0, 2.7], [9.4, .5, 2.7]])}" stroke="#9FB6C4" stroke-width="2" stroke-linecap="round" fill="none"/>`;
+  h += box(6.2, 3.9, 3.8, .2, 1.4, '#CDB8A4', '#EADFD3', '#F1E6DA');
+  h += poly([[8.15, 2.05, .12], [9.9, 2.05, .12], [9.9, 2.05, 2.9], [8.15, 2.05, 2.9]], '#CFE8F5', 'opacity=".5" stroke="#fff" stroke-width="1.2"');
+  h += poly([[9.9, .15, .12], [9.9, 2.05, .12], [9.9, 2.05, 2.9], [9.9, .15, 2.9]], '#CFE8F5', 'opacity=".45" stroke="#fff" stroke-width="1.2"');
+  // 客廳：沙發、盆栽、書櫃
+  h += box(.15, 5.2, 1.2, 3.2, .7, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 5.2, .4, 3.2, 1.45, '#8CC3B3', '#73AE9E', '#65A090');
+  h += box(.15, 5.0, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090') + box(.15, 8.3, 1.3, .3, 1, '#8CC3B3', '#73AE9E', '#65A090');
+  h += box(9.2, 5.6, .65, 1.8, 2.3, '#EBD3B4', '#D4B48C', '#C4A37A');
+  [.9, 1.6].forEach(z => h += `<polyline points="${P([[9.2, 7.41, z], [9.85, 7.41, z]])}" stroke="#B48E62" stroke-width="1" fill="none"/>`);
+  h += box(.35, 9.35, .5, .5, .5, '#C98F6A', '#B97E59', '#A96F4C');
+  { const [px, py] = ISO(.6, 9.6, 1.2); h += `<circle cx="${px}" cy="${py - 4}" r="7" fill="#86BE7E"/><circle cx="${px + 4}" cy="${py - 8}" r="4.5" fill="#9CCD93"/>`; }
+  return h;
+}
+const TABLE = [3.4, 6.4, 1.6, 1.1];        // 茶几（人物會繞過、前後遮擋要排序）
+function houseSVG() {
+  const zs = db.zones.filter(z => SPOTS[z.spot]);
+  let crates = '';
+  zs.filter(z => z.spot[0] === 'f').forEach(z => { const [x, y] = SPOTS[z.spot]; crates += box(x - .35, y - .35, .7, .7, .6, '#EDCB94', '#D8AE70', '#C79C5E'); });
+  const bubbles = zs.map(z => {
+    const [x, y, zz] = SPOTS[z.spot], [bx, by] = ISO(x, y, zz + .2);
+    const items = db.stock.filter(s => s.zone === z.id), lows = items.filter(isLow).length;
+    const w = z.name.length * 10.5 + 40;
+    return `<g class="zb${selZone === z.id ? ' on' : ''}${lows ? ' low' : ''}" data-zone="${z.id}" transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
+      <path d="M-4 -6 L0 0 L4 -6Z" class="tip"/><rect x="${-w / 2}" y="-23" width="${w}" height="18" rx="9"/>
+      <text x="${-w / 2 + 7}" y="-10.2">${z.icon} ${esc(z.name)}</text>
+      <circle cx="${w / 2 - 10}" cy="-14" r="6.4" class="cnt"/><text x="${w / 2 - 10}" y="-10.8" class="n">${lows || items.length}</text></g>`;
+  }).join('');
+  const [tx, ty, tw, td] = TABLE;
+  return `<svg viewBox="0 0 360 226" role="img" aria-label="家裡的小房子">${houseStatic()}${crates}
+    <g id="hs-movers">
+      <g class="mv" id="mv-table" data-d="${tx + tw / 2 + ty + td / 2}">${box(tx, ty, tw, td, .55, '#EBC495', '#D3A472', '#C29462')}</g>
+      <g class="mv person" id="mv-ben"><g class="flip">${charBen()}</g></g>
+      <g class="mv person" id="mv-sarah"><g class="flip">${charSarah()}</g></g>
+      <g class="mv pet" id="mv-cat"><g class="flip"><g class="walk">${charCat('hs-catmask')}</g></g></g>
+    </g>${bubbles}</svg>`;
+}
+
+// 人和貓在客廳走來走去
+let houseRaf = 0;
+function houseWalkable(x, y) {
+  if (x < 1.9 || x > 8.9 || y < 4.7 || y > 9.6) return false;
+  if (x > TABLE[0] - .5 && x < TABLE[0] + TABLE[2] + .3 && y > TABLE[1] - .4 && y < TABLE[1] + TABLE[3] + .4) return false;
+  if (x > 8.6 && y > 5.3 && y < 7.7) return false;                                           // 書櫃
+  return !db.zones.some(z => z.spot && z.spot[0] === 'f' && SPOTS[z.spot] && Math.hypot(SPOTS[z.spot][0] - x, SPOTS[z.spot][1] - y) < .8);
+}
+function houseSpot() { for (let i = 0; i < 80; i++) { const x = 2 + Math.random() * 6.8, y = 4.8 + Math.random() * 4.7; if (houseWalkable(x, y)) return [x, y]; } return [6, 9]; }
+function startHouse() {
+  cancelAnimationFrame(houseRaf);
+  const movers = [['mv-ben', 2.6, 8.4, .55, .62], ['mv-sarah', 5.6, 8.6, .55, .62], ['mv-cat', 7.4, 6.6, .9, .5]].map(([id, x, y, speed, size]) => {
+    const el = document.getElementById(id); if (!el) return null;
+    if (!houseWalkable(x, y)) [x, y] = houseSpot();
+    return { el, x, y, tx: x, ty: y, speed, size, dir: 1, wait: 600 + Math.random() * 2500 };
+  }).filter(Boolean);
+  if (!movers.length) return;
+  const group = document.getElementById('hs-movers'), table = document.getElementById('mv-table');
+  let last = performance.now();
+  const step = now => {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (!document.body.contains(group) || $('#page-stock').hidden) return;          // 換頁就停
+    for (const p of movers) {
+      if (p.wait > 0) { p.wait -= dt * 1000; p.el.classList.remove('moving'); }
+      else {
+        const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
+        if (d < .05) { [p.tx, p.ty] = houseSpot(); p.wait = 1200 + Math.random() * 3500; }
+        else {
+          const v = Math.min(d, p.speed * dt), nx = p.x + dx / d * v, ny = p.y + dy / d * v;
+          if (houseWalkable(nx, ny) || !houseWalkable(p.x, p.y)) { p.x = nx; p.y = ny; } else [p.tx, p.ty] = houseSpot();
+          const sdx = dx - dy;                                                         // 螢幕上的左右
+          if (Math.abs(sdx) > .02) p.dir = sdx > 0 ? 1 : -1;
+          p.el.classList.add('moving');
+        }
+      }
+      const [sx, sy] = ISO(p.x, p.y);
+      p.el.setAttribute('transform', `translate(${sx.toFixed(1)},${sy.toFixed(1)})`);
+      p.el.firstElementChild.setAttribute('transform', `scale(${p.dir * p.size},${p.size})`);
+      p.el.dataset.d = p.x + p.y;
+    }
+    [table, ...movers.map(p => p.el)].sort((a, b) => a.dataset.d - b.dataset.d).forEach(n => group.appendChild(n));
+    houseRaf = requestAnimationFrame(step);
+  };
+  houseRaf = requestAnimationFrame(step);
+}
+
+// 區域管理
+function openZones() {
+  const cnt = id => db.stock.filter(s => s.zone === id).length;
+  openSheet(`<h3>家裡的區域</h3>
+    <div class="zlist">${db.zones.map(z => `<button class="zrow" data-id="${z.id}"><span>${z.icon}</span><b>${esc(z.name)}</b><small>${cnt(z.id)} 樣</small><span class="chev">›</span></button>`).join('')
+      || '<p class="empty">還沒有區域</p>'}</div>
+    <div class="btns"><button class="primary" id="z-add">＋ 新增區域</button><button id="z-close">完成</button></div>
+    <p class="hint">新增的區域會在小房子地上多一個紙箱（最多 5 個），超過的只出現在下面的按鈕。</p>`);
+  $('#z-close').onclick = closeSheet;
+  $('#z-add').onclick = () => editZone(null);
+  $('#sheet .zlist').onclick = e => { const b = e.target.closest('.zrow'); if (b) editZone(zoneOf(b.dataset.id)); };
+}
+function editZone(z) {
+  const isNew = !z, v = z || { name: '', icon: '📦' };
+  openSheet(`<h3>${isNew ? '新增區域' : '修改區域'}</h3>
+    <label>名稱</label><input id="z-name" value="${esc(v.name)}" placeholder="例如：客廳、儲藏室">
+    <label>圖示</label><div class="icongrid">${ZICONS.map(i => `<button type="button" class="${i === v.icon ? 'on' : ''}">${i}</button>`).join('')}</div>
+    <p class="err" id="z-err"></p>
+    <div class="btns"><button class="primary" id="z-save">儲存</button>${isNew ? '' : '<button class="danger" id="z-del">刪除</button>'}<button id="z-back">取消</button></div>
+    ${isNew ? '' : '<p class="hint">刪除區域不會刪掉裡面的用品，它們會變成「未分區」。</p>'}`);
+  if (isNew) setTimeout(() => $('#z-name').focus(), 50);
+  $('#sheet .icongrid').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+    $('#sheet .icongrid').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  $('#z-back').onclick = openZones;
+  $('#z-save').onclick = () => {
+    const name = $('#z-name').value.trim(); if (!name) return $('#z-err').textContent = '請寫名稱';
+    const icon = ($('#sheet .icongrid .on') || {}).textContent || '📦';
+    if (isNew) {
+      const used = new Set(db.zones.map(x => x.spot)), spot = ['f1', 'f2', 'f3', 'f4', 'f5'].find(f => !used.has(f)) || '';
+      db.zones.push({ id: uid(), name, icon, spot });
+    } else Object.assign(z, { name, icon });
+    save(); renderStock(); openZones(); toast('已儲存');
+  };
+  if (!isNew) $('#z-del').onclick = () => {
+    db.stock.forEach(s => { if (s.zone === z.id) s.zone = ''; });
+    db.zones = db.zones.filter(x => x !== z); if (selZone === z.id) selZone = '';
+    save(); renderStock(); openZones(); toast('已刪除區域');
+  };
+}
+
 function renderStock() {
-  const lows = db.stock.filter(isLow), oks = db.stock.filter(s => !isLow(s)).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-  const shopCount = lows.length + db.shop.filter(x => !x.done).length;
+  if (selZone && selZone !== '_none' && !zoneOf(selZone)) selZone = '';
+  const allLows = db.stock.filter(isLow);
+  const mine = db.stock.filter(s => inZone(s, selZone));
+  const lows = mine.filter(isLow), oks = mine.filter(s => !isLow(s)).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+  const shopCount = allLows.length + db.shop.filter(x => !x.done).length;
   document.querySelectorAll('.stabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === stockTab));
   $('#shop-badge').textContent = shopCount || '';
   $('#shop-badge').hidden = !shopCount;
@@ -734,13 +927,30 @@ function renderStock() {
       <span class="spm"><button data-d="-1" aria-label="少一個">−</button><button data-d="1" aria-label="多一個">＋</button></span>
     </div>`;
   };
-  $('#stock-list').innerHTML =
-    (lows.length ? `<div class="sec low">需要補貨（${lows.length}）</div>${lows.map(row).join('')}` : '') +
-    `<div class="sec">其他用品（${oks.length}）</div>${oks.map(row).join('') || '<p class="empty">還沒有用品，按「＋ 新增」加一個</p>'}`;
+  if (stockTab === 'stock') {
+    $('#house').innerHTML = houseSVG();
+    const n = id => db.stock.filter(s => inZone(s, id)).length, none = n('_none');
+    $('#zchips').innerHTML = `<button data-z="" class="${selZone === '' ? 'on' : ''}">全部 <small>${db.stock.length}</small></button>` +
+      db.zones.map(z => `<button data-z="${z.id}" class="${selZone === z.id ? 'on' : ''}${db.stock.some(s => s.zone === z.id && isLow(s)) ? ' low' : ''}">${z.icon} ${esc(z.name)} <small>${n(z.id)}</small></button>`).join('') +
+      (none ? `<button data-z="_none" class="${selZone === '_none' ? 'on' : ''}">未分區 <small>${none}</small></button>` : '') +
+      `<button class="zedit" id="zone-edit">✎ 區域</button>`;
+    startHouse();
+  }
+  let body = lows.length ? `<div class="sec low">需要補貨（${lows.length}）</div>${lows.map(row).join('')}` : '';
+  if (selZone === '') {           // 全部：依區域分段
+    db.zones.forEach(z => { const g = oks.filter(s => s.zone === z.id); if (g.length) body += `<div class="sec">${z.icon} ${esc(z.name)}（${g.length}）</div>${g.map(row).join('')}`; });
+    const g = oks.filter(s => !zoneOf(s.zone)); if (g.length) body += `<div class="sec">未分區（${g.length}）</div>${g.map(row).join('')}`;
+    if (!db.stock.length) body += '<p class="empty">還沒有用品，按「＋ 新增」加一個</p>';
+  } else {
+    const z = zoneOf(selZone);
+    body += `<div class="sec">${z ? z.icon + ' ' + esc(z.name) : '未分區'}（${oks.length}）</div>${oks.map(row).join('')}`;
+    if (!mine.length) body += '<p class="empty">這裡還沒有東西，按「＋ 新增」加一個</p>';
+  }
+  $('#stock-list').innerHTML = body;
   const manual = db.shop;
   $('#shop-list').innerHTML =
-    (lows.length ? `<div class="sec low">庫存偏低（自動加入）</div>` + lows.map(s => `<button class="shrow" data-stock="${s.id}">
-      <span class="box"></span><span>${s.icon} ${esc(s.name)}</span><small>剩 ${fmtQty(s.qty)} ${esc(s.unit)}</small></button>`).join('') : '') +
+    (allLows.length ? `<div class="sec low">庫存偏低（自動加入）</div>` + allLows.map(s => `<button class="shrow" data-stock="${s.id}">
+      <span class="box"></span><span>${s.icon} ${esc(s.name)}</span><small>${zoneOf(s.zone) ? esc(zoneOf(s.zone).name) + '・' : ''}剩 ${fmtQty(s.qty)} ${esc(s.unit)}</small></button>`).join('') : '') +
     `<div class="sec">自己加的</div>` +
     (manual.length ? manual.map(x => `<button class="shrow${x.done ? ' done' : ''}" data-shop="${x.id}"><span class="box"></span><span>${esc(x.name)}</span></button>`).join('')
       : '<p class="empty">在上面輸入要買的東西</p>') +
@@ -750,10 +960,12 @@ function renderStock() {
 
 function openStock(s) {
   const isNew = !s;
-  const v = s || { name: '', icon: '📦', qty: 1, unit: '個', low: 1 };
+  const v = s || { name: '', icon: '📦', qty: 1, unit: '個', low: 1, zone: zoneOf(selZone) ? selZone : '' };
+  let zsel = zoneOf(v.zone) ? v.zone : '';
   openSheet(`
     <h3>${isNew ? '新增用品' : '修改用品'}</h3>
     <label>名稱</label><input id="s-name" value="${esc(v.name)}" placeholder="例如：沐浴乳">
+    <label>放在哪裡</label><div class="zpick">${db.zones.map(z => `<button type="button" data-z="${z.id}" class="${z.id === zsel ? 'on' : ''}">${z.icon} ${esc(z.name)}</button>`).join('')}<button type="button" data-z="" class="${zsel ? '' : 'on'}">不分區</button></div>
     <label>圖示</label><div class="icongrid">${ICONS.map(i => `<button type="button" class="${i === v.icon ? 'on' : ''}">${i}</button>`).join('')}</div>
     <div class="row2"><div><label>現在有幾個</label><input id="s-qty" type="number" inputmode="decimal" min="0" step="any" value="${v.qty}"></div>
       <div><label>單位</label><input id="s-unit" value="${esc(v.unit)}" placeholder="瓶、包、顆"></div></div>
@@ -764,12 +976,14 @@ function openStock(s) {
   if (isNew) setTimeout(() => $('#s-name').focus(), 50);
   $('#sheet .icongrid').onclick = e => { const b = e.target.closest('button'); if (!b) return;
     $('#sheet .icongrid').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b)); };
+  $('#sheet .zpick').onclick = e => { const b = e.target.closest('button'); if (!b) return; zsel = b.dataset.z;
+    $('#sheet .zpick').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
   $('#s-cancel').onclick = closeSheet;
   $('#s-save').onclick = () => {
     const name = $('#s-name').value.trim(), qty = parseFloat($('#s-qty').value), low = parseFloat($('#s-low').value);
     if (!name) return $('#s-err').textContent = '請寫名稱';
     if (!(qty >= 0) || !(low >= 0)) return $('#s-err').textContent = '數量請填數字';
-    const data = { name, icon: $('#sheet .icongrid .on').textContent, qty, unit: $('#s-unit').value.trim() || '個', low };
+    const data = { name, icon: $('#sheet .icongrid .on').textContent, qty, unit: $('#s-unit').value.trim() || '個', low, zone: zsel };
     if (isNew) db.stock.push({ id: uid(), ...data }); else Object.assign(s, data);
     save(); closeSheet(); renderStock(); toast('已儲存');
   };
@@ -789,6 +1003,11 @@ function buyStock(s) {   // 採買清單勾選庫存品 → 問買了幾個，�
 function bindStock() {
   document.querySelectorAll('.stabs button').forEach(b => b.onclick = () => { stockTab = b.dataset.tab; renderStock(); });
   $('#stock-add').onclick = () => openStock(null);
+  $('#house').addEventListener('click', e => { const b = e.target.closest('.zb'); if (!b) return;
+    selZone = selZone === b.dataset.zone ? '' : b.dataset.zone; renderStock(); });
+  $('#zchips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'zone-edit') return openZones();
+    selZone = b.dataset.z; renderStock(); });
   $('#stock-list').onclick = e => {
     const r = e.target.closest('.srow'); if (!r) return;
     const s = db.stock.find(x => x.id === r.dataset.id); if (!s) return;
