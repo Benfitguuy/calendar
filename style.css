@@ -459,3 +459,21 @@ body.th-month.th-period{--bg:#FDEAE1;--card:#FFF8F4;--line:#F5D3C3;--line2:#FBEA
 .mbar.on{width:calc(var(--span) * 100% / 7 - 2px);border-top-right-radius:0;border-bottom-right-radius:0}
 .mbar.cont.on{width:calc(var(--span) * 100% / 7)}
 .evrow.card-pay{border-left:4px solid #E8604C}.evrow.card-stmt{border-left:4px solid #A9C8E8}
+
+/* v0.30 週檢視 */
+.mframe.wk .mweek{display:none}
+#mgrid.wkmode{display:flex;flex-direction:column;gap:0}
+.wday{display:flex;gap:10px;width:100%;text-align:left;padding:10px 6px;border-top:1px solid rgba(0,0,0,.08);background:none;align-items:flex-start;min-height:58px}
+.wday:first-child{border-top:0}
+.wdate{flex:none;width:42px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.wdate small{font-size:11px;color:var(--muted);font-weight:700}
+.wdate b{width:32px;height:32px;line-height:32px;border-radius:50%;text-align:center;font-size:17px}
+.wday.wkend .wdate small{color:#D27A92}
+.wday.today .wdate b{background:#E9C9D2}
+.wbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;padding-top:4px}
+.wchips{display:flex;flex-wrap:wrap;gap:4px}
+.wrow{display:block;font-size:13px;font-weight:600;padding:3px 7px;border-left:3px solid;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrow b{font-size:11px;margin-right:6px;opacity:.75}
+.wrow.ben{background:var(--ben-bg);border-color:var(--ben-bd);color:var(--ben-fg)}.wrow.sarah{background:var(--sarah-bg);border-color:var(--sarah-bd);color:var(--sarah-fg)}
+.wrow.both{background:var(--both-bg);border-color:var(--both-bd);color:var(--both-fg)}.wrow.work{background:var(--work-bg);border-color:var(--work-bd);color:var(--work-fg)}
+.wempty{font-size:12px;color:var(--muted);padding-top:8px;font-weight:600}
