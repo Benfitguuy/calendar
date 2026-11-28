@@ -351,3 +351,13 @@ body.th-money .pos{color:#4E7F55}
 #sheet select{width:100%;font:inherit;font-size:16px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--text)}
 .chk{display:flex!important;align-items:center;gap:8px;color:var(--text)!important;font-size:15px!important}
 [hidden]{display:none!important}
+
+/* v0.21 移動／取消紀錄：縮成 15 分鐘的小格 */
+.ev.evg{padding:2px 6px;font-size:11px;background:var(--card)!important;border-style:dashed!important;opacity:.85;box-shadow:none;z-index:1}
+.ev.evg b{font-weight:600;line-height:15px}
+.ev.evg.cancelled b{color:#B0475A}
+.ev.evg.moved b{color:#7A6A9E}
+.ev small.from{font-weight:600;opacity:.9}
+.mini.evg{opacity:.55;text-decoration:line-through}
+.evrow.evg{opacity:.7;border-style:dashed}
+.ghostinfo{font-size:15px;line-height:1.7;background:#fff;border-radius:12px;padding:10px 12px;margin:6px 0}
