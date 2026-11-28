@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@400..800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=0.24.0">
 </head>
 <body class="th-day">
 <div id="app">
@@ -24,6 +24,7 @@
     <header>
       <div class="top">
         <h1 id="month"></h1>
+        <span id="sky"></span>
         <div class="top-btns">
           <button id="today" class="pill">今天</button>
           <button id="add" class="round" aria-label="新增行程">＋</button>
@@ -51,7 +52,7 @@
 
     <section id="tray">
       <div class="tray-head">
-        <span>待安排 <b id="tcount"></b></span>
+        <span><svg class="tray-plant" viewBox="0 0 20 22" aria-hidden="true"><path d="M5 14h10l-1.5 7h-7z" fill="#E8A87C"/><path d="M10 14 C9 9 5 8 3 9 C4 12 7 13 10 14 M10 14 C11 8 15 6 17 7 C16 11 13 13 10 14 M10 14 V6" stroke="#6EA55E" stroke-width="1.6" fill="#9CCD93" stroke-linejoin="round"/></svg>待安排 <b id="tcount"></b></span>
         <button id="addtodo" class="pill">＋ 新增</button>
       </div>
       <div id="chips"></div>
@@ -77,6 +78,8 @@
         <div id="mgrid"></div>
       </div>
       <div class="legend" id="legend"></div>
+      <div id="cycle-log" hidden></div>
+      <div id="m-deco" class="mdeco" aria-hidden="true"></div>
       <p class="tray-hint" id="m-hint"></p>
     </main>
   </div>
@@ -112,6 +115,6 @@
 <div id="preview" hidden></div>
 <div id="toast"></div>
 
-<script src="chars.js"></script><script src="app.js"></script>
+<script src="chars.js?v=0.24.0"></script><script src="app.js?v=0.24.0"></script>
 </body>
 </html>
