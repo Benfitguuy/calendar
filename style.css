@@ -411,3 +411,12 @@ body.th-money .pos{color:#4E7F55}
 .cl-bar{grid-column:1/4;position:relative;height:6px;border-radius:3px;background:#F6E3EA;overflow:hidden}
 .cl-bar i{position:absolute;left:0;top:0;bottom:0;background:#F8CAD7;border-radius:3px}
 .cl-bar em{position:absolute;left:0;top:0;bottom:0;background:#E46A8E;border-radius:3px}
+
+/* v0.25 更粉嫩的底色；月曆「行事曆」淡藍紫、「經期」淡玫瑰 */
+body.th-day{--bg:#FDF1F5;--card:#FFFBFD;--line:#F5DCE6;--line2:#FBEDF2;--soft:#F8DDE7;--muted:#A88E99;--hi:#FCE6EE;--hi-bd:#EE8FAE}
+body.th-month{--bg:#EEF2FD;--card:#FAFBFF;--line:#DCE3F6;--line2:#EDF1FB;--soft:#DFE6F8;--muted:#8D95AE;--hi:#E5EBFB;--hi-bd:#8EA2E6}
+body.th-month.th-period{--bg:#FDEBF1;--card:#FFF8FA;--line:#F5D5E0;--line2:#FBE9EF;--soft:#F8D6E2;--muted:#A88C97;--hi:#FCE2EB;--hi-bd:#EE7F9C}
+.nowcat{right:auto;left:50%;transform:translateX(-50%)}
+.zl{stroke:#B9A8DC;stroke-width:1;stroke-dasharray:2.5 2;fill:none}.zl.on{stroke:#8E7CC3;stroke-width:1.6;stroke-dasharray:none}
+.zd{fill:#fff;stroke:#8E7CC3;stroke-width:1.4}.zd.on{fill:#8E7CC3}
+.hs-famrow{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:6px 10px;border-radius:12px;background:rgba(255,255,255,.85);font-size:11px;white-space:nowrap;overflow-x:auto}
