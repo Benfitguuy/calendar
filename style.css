@@ -309,3 +309,33 @@ body.th-money .pos{color:#4E7F55}
 .isl-net em{display:inline-block;font-style:normal;font-size:13px;padding:3px 12px;border-radius:999px;margin-top:4px;background:#DCEBDA;color:#4E7F55}
 .isl-net em.warn{background:#FFF0C9;color:#9A6B12} .isl-net em.bad{background:#FBE0E0;color:#B04A4A}
 .xrow.adj{opacity:.7} .xrow.future{opacity:.55}
+
+/* v0.17 庫存小房子＋區域 */
+.house{margin:4px 0 6px;background:linear-gradient(#F3EEFB,#E9E2F6);border-radius:18px;overflow:hidden}
+.house svg{display:block;width:100%;height:auto}
+.zb{cursor:pointer}
+.zb rect{fill:#fff;stroke:#B9A8DC;stroke-width:1.4}
+.zb .tip{fill:#B9A8DC}
+.zb text{font-size:10.5px;font-weight:700;fill:#4A3A3F}
+.zb .cnt{fill:#8E7CC3}
+.zb text.n{fill:#fff;font-size:9px;text-anchor:middle}
+.zb.low rect{stroke:#F0A04B}.zb.low .tip,.zb.low .cnt{fill:#F0A04B}
+.zb.on rect{fill:#8E7CC3;stroke:#8E7CC3}.zb.on text{fill:#fff}.zb.on .cnt{fill:#fff}.zb.on text.n{fill:#8E7CC3}
+.mv.moving .leg.l1{animation:legs .4s ease-in-out infinite;transform-box:fill-box;transform-origin:top}
+.mv.moving .leg.l2{animation:legs .4s ease-in-out infinite reverse;transform-box:fill-box;transform-origin:top}
+.mv.pet.moving .walk{animation:hop .35s ease-in-out infinite}
+@keyframes hop{50%{transform:translateY(-1.5px)}}
+@keyframes legs{0%{transform:rotate(16deg)}100%{transform:rotate(-16deg)}}
+.zchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.zchips::-webkit-scrollbar{display:none}
+.zchips button{flex:none;padding:6px 11px;border-radius:999px;background:#fff;border:1.5px solid #DCD2EF;font-size:13px;white-space:nowrap}
+.zchips button small{color:var(--muted);margin-left:2px}
+.zchips button.low{border-color:#F0A04B}
+.zchips button.on{background:#8E7CC3;border-color:#8E7CC3;color:#fff}.zchips button.on small{color:#EDE7FA}
+.zchips .zedit{background:transparent;border-style:dashed;color:var(--muted)}
+.zpick{display:flex;flex-wrap:wrap;gap:6px}
+.zpick button{padding:7px 11px;border-radius:999px;background:var(--soft);border:2px solid transparent;font-size:14px}
+.zpick button.on{border-color:#8E7CC3;background:#ECE6F7}
+.zlist{display:flex;flex-direction:column;gap:6px}
+.zrow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:#fff;border:1px solid var(--line);text-align:left;font-size:16px}
+.zrow b{flex:1;font-weight:600}.zrow small{color:var(--muted)}.zrow .chev{color:var(--muted)}
