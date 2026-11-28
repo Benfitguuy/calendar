@@ -798,10 +798,10 @@ const fmtQty = n => Math.round(n * 100) / 100;
 // ---------- v0.17 庫存區域＋小房子（參考 HomeStock，Adam 原創 SVG） ----------
 // db.zones：[{ id, name, icon, spot }]；spot＝房子裡的位置（fridge/counter/sink/shower 是家具，f1–f5 是地上的紙箱）
 // db.stock 每一項多一個 zone（區域 id，'' ＝未分區）
-const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [3.1, 0.7, 1.25], pantry: [.6, 3.3, 1.9], toilet: [8.0, 1.2, 1.5], bed: [1.8, 7.3, .8],
+const SPOTS = { fridge: [0.8, 0.8, 2.8], counter: [4.3, 0.5, 1.25], dining: [2.4, 3.9, .8], pantry: [.6, 3.3, 1.9], toilet: [8.0, 1.2, 1.5], bed: [1.8, 7.3, .8],
   garage: [11.7, 4.8, 1.9], garden: [2.9, 11.6, .5],
   f1: [2.4, 4.8, .6], f2: [5.6, 9.2, .6], f3: [9.2, 9.1, .6], f4: [3.9, 9.3, .6], f5: [8.9, 6.0, .6] };
-const ZICONS = ['🧊', '🍳', '🥫', '🛁', '🚽', '🌷', '🧰', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
+const ZICONS = ['🧊', '🍳', '🍽️', '🥫', '🛁', '🚽', '🌷', '🧰', '🚰', '🚿', '🛋️', '🛏️', '🧺', '🚪', '🐱', '🚗', '📦', '🗄️', '🪴', '🧸'];
 if (!db.zones) {
   db.zones = [{ id: 'z-fridge', name: '冰箱', icon: '🧊', spot: 'fridge' }, { id: 'z-counter', name: '流理臺', icon: '🍳', spot: 'counter' },
     { id: 'z-sink', name: '洗手台', icon: '🚰', spot: 'sink' }, { id: 'z-shower', name: '淋浴間', icon: '🚿', spot: 'shower' }];
@@ -820,10 +820,15 @@ if ((db.zoneV || 1) < 2) {
   db.zones.forEach(z => { if (z.spot && !SPOTS[z.spot]) z.spot = ''; });
   db.zoneV = 2; save();
 }
+if ((db.zoneV || 1) === 4) {                                // v0.23：加餐廳
+  if (!db.zones.some(z => z.spot === 'dining')) db.zones.push({ id: 'z-dining', name: '餐廳', icon: '🍽️', spot: 'dining' });
+  db.zoneV = 5; save();
+}
 if ((db.zoneV || 1) < 4 && (db.zoneV || 1) >= 3) {          // v0.22：加車庫、花園
   if (!db.zones.some(z => z.spot === 'garage')) db.zones.push({ id: 'z-garage', name: '車庫', icon: '🚗', spot: 'garage' });
   if (!db.zones.some(z => z.spot === 'garden')) db.zones.push({ id: 'z-garden', name: '花園', icon: '🌷', spot: 'garden' });
-  db.zoneV = 4; save();
+  if (!db.zones.some(z => z.spot === 'dining')) db.zones.push({ id: 'z-dining', name: '餐廳', icon: '🍽️', spot: 'dining' });
+  db.zoneV = 5; save();
 }
 if ((db.zoneV || 1) < 3) {
   const wc = db.zones.find(z => z.spot === 'toilet');
@@ -835,7 +840,8 @@ if ((db.zoneV || 1) < 3) {
   db.zoneV = 3;
   if (!db.zones.some(z => z.spot === 'garage')) db.zones.push({ id: 'z-garage', name: '車庫', icon: '🚗', spot: 'garage' });
   if (!db.zones.some(z => z.spot === 'garden')) db.zones.push({ id: 'z-garden', name: '花園', icon: '🌷', spot: 'garden' });
-  db.zoneV = 4; save();
+  if (!db.zones.some(z => z.spot === 'dining')) db.zones.push({ id: 'z-dining', name: '餐廳', icon: '🍽️', spot: 'dining' });
+  db.zoneV = 5; save();
 }
 let selZone = '';                       // '' ＝全部；'_none' ＝未分區；其他＝區域 id
 const zoneOf = id => db.zones.find(z => z.id === id);
@@ -883,6 +889,13 @@ function houseStatic() {
   h += `<polyline points="${P([[1.11, 1.6, 1.2], [1.11, 3.4, 1.2]])}" stroke="#B48E62" stroke-width="1" fill="none"/>`;
   [[2.3, 1.5], [2.7, 1.5], [2.3, 1.9], [2.7, 1.9]].forEach(([y, z]) => h += `<polyline points="${P([[1.11, y, z], [1.11, y, z + .3]])}" stroke="#fff" stroke-width="1.4" stroke-linecap="round" fill="none"/>`);
   { [[.55, 2.0, '#E9776B'], [.6, 2.45, '#F2C14E'], [.55, 2.9, '#7FB07A']].forEach(([x, y, c]) => h += box(x - .12, y - .12, .24, .24, .32, c, c, c, 2.4)); }   // 櫃子上的調味罐
+  // 餐廳（v0.23）：廚房前半部，地墊＋餐桌＋四張椅子＋桌上小花
+  h += poly([[1.6, 2.1], [4.6, 2.1], [4.6, 4.3], [1.6, 4.3]], '#F1DFC6');
+  const chair = (x, y, back) => box(x, y, .5, .45, .45, '#E3B988', '#C99A68', '#B98A58') + (back ? box(x, back === 'n' ? y : y + .38, .5, .07, 1.0, '#E3B988', '#C99A68', '#B98A58') : '');
+  h += chair(2.35, 2.25, 'n') + chair(3.25, 2.25, 'n');
+  h += box(2.1, 2.75, 1.9, 1.0, .75, '#F4E1C7', '#D9B88E', '#C9A67A');                                     // 餐桌
+  { const [fx, fy] = ISO(3.05, 3.25, .76); h += `<rect x="${fx - 1.5}" y="${fy - 6}" width="3" height="6" rx="1" fill="#BFE0F2"/><circle cx="${fx}" cy="${fy - 7}" r="2.4" fill="#F28CA8"/>`; }
+  h += chair(2.35, 3.85, 's') + chair(3.25, 3.85, 's');
   // 流理臺（水槽＋爐子）
   h += box(1.6, .15, 3.1, 1.1, 1.25, '#FFFFFF', '#ECCDA5', '#DBB88C');
   h += poly([[1.9, .35, 1.26], [2.8, .35, 1.26], [2.8, 1.05, 1.26], [1.9, 1.05, 1.26]], '#C9DEE9');
@@ -948,6 +961,28 @@ function houseOutside() {
   h += box(.2, 12.97, 5.5, .06, .1, '#FFFFFF', '#EFE7DA', '#E2D8C8', .5);
   return h;
 }
+// v0.23 房子上的小泡泡
+const CAT_DO = ['睡午覺', '散步中', '理毛中', '發呆中', '吃飯中', '曬太陽'];
+function familyStatus(who) {                 // 從今天的時間軸看現在在做什麼
+  const now = new Date(), day = ymd(now), m = now.getHours() * 60 + now.getMinutes();
+  const ev = db.events.filter(e => !e.ghost && occursOn(e, day) && (e.owner === who || e.owner === 'both' || e.owner === 'work'))
+    .find(e => { const s = toMin(e.start), en = e.end ? toMin(e.end) : s + NO_END_MINS; return m >= s && m < en; });
+  return ev ? ev.title : '休息中';
+}
+function houseClock() { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function houseOverlay() {
+  const lows = db.stock.filter(isLow).length;
+  const cat = CAT_DO[Math.floor(Date.now() / 600000) % CAT_DO.length];       // 每 10 分鐘換一件事
+  return `<div class="hs-ov tl" id="hs-clock">${houseClock()}</div>
+    <button class="hs-ov tr${lows ? ' warn' : ''}" id="hs-low">🔔 ${lows ? `需要補貨 ${lows} 項` : '庫存都夠'}</button>
+    <div class="hs-ov bot hs-fam" id="hs-fam"><small>家人動態</small>
+      <span><i class="dot b"></i>Ben<em>${esc(familyStatus('ben'))}</em></span>
+      <span><i class="dot s"></i>Sarah<em>${esc(familyStatus('sarah'))}</em></span>
+      <span><i class="dot c"></i>布偶貓<em>${cat}</em></span></div>`;
+}
+setInterval(() => { if (!$('#hs-clock') || $('#page-stock').hidden) return;
+  $('#hs-clock').textContent = houseClock();
+  const f = $('#hs-fam'); if (f) f.outerHTML = (new DOMParser().parseFromString(houseOverlay(), 'text/html').querySelector('#hs-fam')).outerHTML; }, 20000);
 function houseSVG() {
   const zs = db.zones.filter(z => SPOTS[z.spot]);
   let crates = '';
@@ -962,7 +997,7 @@ function houseSVG() {
       <circle cx="${w / 2 - 10}" cy="-14" r="6.4" class="cnt"/><text x="${w / 2 - 10}" y="-10.8" class="n">${lows || items.length}</text></g>`;
   }).join('');
   const [tx, ty, tw, td] = TABLE;
-  return `<svg viewBox="0 0 360 226" role="img" aria-label="家裡的小房子">${houseStatic()}${crates}
+  return `<svg viewBox="20 -20 320 260" role="img" aria-label="家裡的小房子">${houseStatic()}${crates}
     <g id="hs-movers">
       <g class="mv" id="mv-table" data-d="${tx + tw / 2 + ty + td / 2}">${box(tx, ty, tw, td, .55, '#EBC495', '#D3A472', '#C29462')}</g>
       <g class="mv person" id="mv-ben"><g class="flip">${charBen()}</g></g>
@@ -1084,7 +1119,7 @@ function renderStock() {
     </div>`;
   };
   if (stockTab === 'stock') {
-    $('#house').innerHTML = houseSVG();
+    $('#house').innerHTML = houseSVG() + houseOverlay();
     const n = id => db.stock.filter(s => inZone(s, id)).length, none = n('_none');
     $('#zchips').innerHTML = `<button data-z="" class="${selZone === '' ? 'on' : ''}">全部 <small>${db.stock.length}</small></button>` +
       db.zones.map(z => `<button data-z="${z.id}" class="${selZone === z.id ? 'on' : ''}${db.stock.some(s => s.zone === z.id && isLow(s)) ? ' low' : ''}">${z.icon} ${esc(z.name)} <small>${n(z.id)}</small></button>`).join('') +
@@ -1118,6 +1153,17 @@ function renderStock() {
 const openBuys = s => (s.buys || []).filter(b => !b.end);
 const dayDiff = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
 const mdd = d => { const x = parseYmd(d); return `${x.getMonth() + 1}/${x.getDate()}`; };
+const BUY_STORES = ['Woolworths', 'Coles', 'ALDI', 'IGA', 'Costco', 'Chemist Warehouse', 'Kmart', 'Bunnings', '亞洲超市'];
+const CARD_WHO = [['', '沒用'], ['ben', 'Ben 的'], ['sarah', 'Sarah 的']];
+const buyFields = (v, s) => {
+  const last = s && (s.buys || []).slice().sort((a, b) => a.date < b.date ? 1 : -1)[0];
+  const store = v.store !== undefined ? v.store : (last && last.store) || '', card = v.card !== undefined ? v.card : (last && last.card) || '';
+  return `<label>在哪裡買</label><input id="x-store" list="x-stores" value="${esc(store)}" placeholder="例如：Woolworths"><datalist id="x-stores">${BUY_STORES.map(x => `<option value="${x}">`).join('')}</datalist>
+    <label>用誰的會員卡</label><div class="cardseg" id="x-card">${CARD_WHO.map(([k, n]) => `<button type="button" data-c="${k}" class="${k === card ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+};
+function bindBuyFields() { $('#x-card').onclick = e => { const b = e.target.closest('button'); if (!b) return; $('#x-card').querySelectorAll('button').forEach(z => z.classList.toggle('on', z === b)); }; }
+const readBuyFields = () => ({ store: $('#x-store').value.trim(), card: ($('#x-card .on') || {}).dataset ? $('#x-card .on').dataset.c : '' });
+const buyWhere = b => [b.store, b.card ? (b.card === 'ben' ? 'Ben' : 'Sarah') + ' 的卡' : ''].filter(Boolean).join('・');
 function avgDays(s) { const f = (s.buys || []).filter(b => b.end); return f.length ? Math.round(f.reduce((t, b) => t + dayDiff(b.date, b.end), 0) / f.length) : null; }
 function renderBuyLog() {
   const all = db.stock.flatMap(s => (s.buys || []).map(b => ({ s, b }))).sort((x, y) => x.b.date < y.b.date ? 1 : -1);
@@ -1125,7 +1171,7 @@ function renderBuyLog() {
   const avgs = db.stock.map(s => [s, avgDays(s)]).filter(([, a]) => a !== null);
   const row = ({ s, b }) => `<button class="blog" data-item="${s.id}" data-buy="${b.id}"><span class="si">${s.icon}</span>
     <span class="bm"><b>${esc(s.name)} <small>×${fmtQty(b.qty)} ${esc(s.unit)}</small></b>
-    <small>${mdd(b.date)} 買進來 → ${b.end ? `${mdd(b.end)} 用完` : '還在用'}</small></span>
+    <small>${mdd(b.date)} 買進來 → ${b.end ? `${mdd(b.end)} 用完` : '還在用'}</small>${buyWhere(b) ? `<small class="where">🏪 ${esc(buyWhere(b))}</small>` : ''}</span>
     <em class="${b.end ? '' : 'using'}">${b.end ? dayDiff(b.date, b.end) + ' 天' : '已 ' + dayDiff(b.date, today) + ' 天'}</em></button>`;
   $('#log-list').innerHTML =
     (avgs.length ? `<div class="sec">平均多久用完</div><div class="avgs">${avgs.map(([s, a]) => `<span>${s.icon} ${esc(s.name)} <b>${a} 天</b></span>`).join('')}</div>` : '') +
@@ -1140,12 +1186,13 @@ function editBuy(s, b) {
   openSheet(`<h3>${isNew ? '記一筆購買' : `${s.icon} ${esc(s.name)}`}</h3>
     ${isNew ? `<label>買了什麼</label><select id="u-item">${db.stock.map(z => `<option value="${z.id}">${z.icon} ${esc(z.name)}</option>`).join('')}</select>` : ''}
     <div class="row2"><div><label>購入日期</label><input id="u-date" type="date" value="${v.date}"></div><div><label>數量</label><input id="u-qty" type="number" inputmode="decimal" min="0" step="any" value="${v.qty}"></div></div>
+    ${buyFields(b ? v : {}, s)}
     <label>用完日期（還在用就空白）</label><input id="u-end" type="date" value="${v.end}">
     <div class="btns"><button id="u-today">今天用完了</button></div>
     ${isNew ? '<label class="chk"><input type="checkbox" id="u-add" checked> 同時加到庫存數量</label>' : ''}
     <p class="err" id="u-err"></p>
     <div class="btns"><button class="primary" id="u-save">儲存</button>${isNew ? '' : '<button class="danger" id="u-del">刪除這筆紀錄</button>'}<button id="u-cancel">取消</button></div>`);
-  $('#u-today').onclick = () => { $('#u-end').value = ymd(new Date()); };
+  $('#u-today').onclick = () => { $('#u-end').value = ymd(new Date()); }; bindBuyFields();
   $('#u-cancel').onclick = closeSheet;
   $('#u-save').onclick = () => {
     const item = isNew ? db.stock.find(z => z.id === $('#u-item').value) : s;
@@ -1153,8 +1200,8 @@ function editBuy(s, b) {
     if (!date) return $('#u-err').textContent = '請選購入日期';
     if (!(qty > 0)) return $('#u-err').textContent = '數量請填數字';
     if (end && end < date) return $('#u-err').textContent = '用完日期不能比購入日期早';
-    if (isNew) { (item.buys = item.buys || []).push({ id: uid(), date, qty, end }); if ($('#u-add').checked && !end) item.qty = fmtQty(item.qty + qty); }
-    else Object.assign(b, { date, qty, end });
+    if (isNew) { (item.buys = item.buys || []).push({ id: uid(), date, qty, end, ...readBuyFields() }); if ($('#u-add').checked && !end) item.qty = fmtQty(item.qty + qty); }
+    else Object.assign(b, { date, qty, end, ...readBuyFields() });
     save(); closeSheet(); renderStock(); toast('已儲存');
   };
   if (!isNew) $('#u-del').onclick = () => { s.buys = s.buys.filter(z => z !== b); save(); closeSheet(); renderStock(); toast('已刪除'); };
@@ -1198,18 +1245,20 @@ function buyStock(s) {   // 採買清單勾選庫存品 → 問買了幾個，�
   openSheet(`<h3>${s.icon} ${esc(s.name)} 買了幾${esc(s.unit)}？</h3>
     <input id="b-n" type="number" inputmode="decimal" min="0" step="any" value="${suggest}" class="big">
     <label>購入日期</label><input id="b-date" type="date" value="${ymd(new Date())}">
+    ${buyFields({}, s)}
     <p class="hint">會加到庫存裡（現在剩 ${fmtQty(s.qty)} ${esc(s.unit)}）</p>
     <div class="btns"><button class="primary" id="b-ok">買好了</button><button id="b-no">取消</button></div>`);
-  $('#b-no').onclick = closeSheet;
+  $('#b-no').onclick = closeSheet; bindBuyFields();
   $('#b-ok').onclick = () => { const n = parseFloat($('#b-n').value) || 0; s.qty = fmtQty(s.qty + n);
-    if (n > 0) (s.buys = s.buys || []).push({ id: uid(), date: $('#b-date').value || ymd(new Date()), qty: n, end: '' });
+    if (n > 0) (s.buys = s.buys || []).push({ id: uid(), date: $('#b-date').value || ymd(new Date()), qty: n, end: '', ...readBuyFields() });
     save(); closeSheet(); renderStock(); toast('已補貨，記在購買紀錄'); };
 }
 
 function bindStock() {
   document.querySelectorAll('.stabs button').forEach(b => b.onclick = () => { stockTab = b.dataset.tab; renderStock(); });
   $('#stock-add').onclick = () => openStock(null);
-  $('#house').addEventListener('click', e => { const b = e.target.closest('.zb'); if (!b) return;
+  $('#house').addEventListener('click', e => { if (e.target.closest('#hs-low')) { stockTab = 'shop'; renderStock(); return; }
+    const b = e.target.closest('.zb'); if (!b) return;
     selZone = selZone === b.dataset.zone ? '' : b.dataset.zone; renderStock(); });
   $('#zchips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
     if (b.id === 'zone-edit') return openZones();
