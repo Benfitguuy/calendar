@@ -60,8 +60,10 @@ Store.save(db);
 const save = () => Store.save(db);
 let sel = ymd(new Date());
 
+const isMulti = e => !!(e.endDate && e.endDate > e.date && (!e.repeat || e.repeat === 'none'));
 function occursOn(e, day) {
   if (day < e.date || (e.ex || []).includes(day)) return false;
+  if (isMulti(e)) return day <= e.endDate;                              // v0.29 多天行程
   const dow = parseYmd(day).getDay();
   switch (e.repeat) {
     case 'daily': return true;
@@ -72,6 +74,21 @@ function occursOn(e, day) {
     default: return day === e.date;
   }
 }
+
+// v0.29 信用卡結算／繳費提醒：讀「我們的錢包」存在同一個網站的資料（our-wallet-v1），只讀不改
+function cardReminders(day) {
+  let w = null; try { w = JSON.parse(localStorage.getItem('our-wallet-v1')); } catch (e) { }
+  if (!w || !Array.isArray(w.accounts)) return [];
+  const d = parseYmd(day), dn = d.getDate(), last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const hit = n => +n > 0 && (+n === dn || (+n > last && dn === last));          // 31 號繳費、這個月只有 30 天 → 30 號提醒
+  const out = [];
+  w.accounts.filter(a => a.type === 'credit').forEach(a => {
+    if (hit(a.payDay)) out.push({ kind: 'pay', title: `💳 ${a.name} 繳費`, short: `${a.name} 繳費` });
+    if (hit(a.statementDay)) out.push({ kind: 'stmt', title: `🧾 ${a.name} 結算`, short: `${a.name} 結算` });
+  });
+  return out;
+}
+const allDayOn = day => db.events.filter(e => e.allDay && !e.ghost && occursOn(e, day));
 
 // ---------- v0.21 移動／取消紀錄 ----------
 const dayLabel = d => { const x = parseYmd(d); return `週${WEEK[x.getDay()]} ${x.getMonth() + 1}/${x.getDate()}`; };
@@ -162,7 +179,9 @@ function layoutLanes(items) {
 
 function renderEvents() {
   const box = $('#events');
-  const items = db.events.filter(e => occursOn(e, sel)).map(e => {
+  renderAllDay();
+  if (!$('#page-month').hidden) renderMonth();
+  const items = db.events.filter(e => !e.allDay && occursOn(e, sel)).map(e => {
     const s = toMin(e.start), e2 = e.ghost ? s + 15 : e.end ? Math.max(toMin(e.end), s + 15) : s + NO_END_MINS;
     return { ev: e, s, e: e2 };
   });
@@ -190,6 +209,14 @@ function renderEvents() {
   box.innerHTML = h;
 }
 
+function renderAllDay() {
+  const box = $('#allday'); if (!box) return;
+  const evs = allDayOn(sel), cards = cardReminders(sel);
+  const nth = e => isMulti(e) ? `<small>${diffDays(e.date, sel) + 1}/${diffDays(e.date, e.endDate) + 1}</small>` : '';
+  box.innerHTML = `<span class="ad-l">整天</span><div class="ad-list">${evs.map(e => `<button class="adc ${e.owner}" data-id="${e.id}">${e.owner === 'both' ? '♥ ' : ''}${esc(e.title)}${nth(e)}</button>`).join('')}
+    ${cards.map(c => `<span class="adc card-${c.kind}">${esc(c.title)}</span>`).join('')}${evs.length || cards.length ? '' : '<span class="ad-empty">節日、提醒、旅行…</span>'}</div>
+    <button class="ad-add" id="ad-add" aria-label="新增整天的行程">＋</button>`;
+}
 function renderTray() {
   $('#tcount').textContent = db.todos.length ? `（${db.todos.length}）` : '';
   $('#chips').innerHTML = db.todos.length
@@ -226,8 +253,8 @@ const segValue = () => $('#sheet .seg .on').dataset.owner;
 // ---------- 新增／編輯行程 ----------
 function openEvent(e, preset = {}) {
   const isNew = !e;
-  const v = e || { title: '', owner: preset.owner || 'sarah', date: sel, start: preset.start || '09:00',
-    end: preset.end || '', repeat: 'none' };
+  const v = e || { title: '', owner: preset.owner || 'sarah', date: preset.date || sel, start: preset.start || '09:00',
+    end: preset.end || '', repeat: 'none', allDay: !!preset.allDay, endDate: preset.endDate || '' };
   const rep = v.repeat !== 'none';
   // 結束時間：無／15 分／30 分／1 小時／自選
   const dur = v.end ? toMin(v.end) - toMin(v.start) : 0;
@@ -237,13 +264,15 @@ function openEvent(e, preset = {}) {
     <h3>${isNew ? '新增行程' : '編輯行程'}</h3>
     <label>要做什麼？</label><input id="f-title" value="${esc(v.title)}" placeholder="例如：看牙醫">
     <label>是誰的？</label>${segHtml(v.owner)}
+    <label class="check fcheck"><input type="checkbox" id="f-allday"${v.allDay ? ' checked' : ''}> 整天（節日、提醒、旅行）</label>
     <label>${rep ? '從哪一天開始' : '日期'}</label><input id="f-date" type="date" value="${v.date}">
-    <div class="row2">
+    <div id="f-daysbox"><label>到哪一天 <span class="opt-tag">好幾天的才填，例如旅行</span></label><input id="f-enddate" type="date" value="${v.endDate || ''}"></div>
+    <div id="f-timebox"><div class="row2">
       <div><label>開始</label><input id="f-start" type="time" step="300" value="${v.start}"></div>
       <div><label>結束</label>
         <select id="f-endsel">${END_OPTS.map(([k, t]) => `<option value="${k}"${k === endSel ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
     </div>
-    <div id="f-endbox"${endSel === 'custom' ? '' : ' hidden'}><label>結束時間</label><input id="f-end" type="time" step="300" value="${v.end || toTime(toMin(v.start) + 90)}"></div>
+    <div id="f-endbox"${endSel === 'custom' ? '' : ' hidden'}><label>結束時間</label><input id="f-end" type="time" step="300" value="${v.end || toTime(toMin(v.start) + 90)}"></div></div>
     <label>重複</label>
     <select id="f-repeat">${Object.entries(REPEAT).filter(([k]) => REPEAT_MENU.includes(k) || k === v.repeat).map(([k, t]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${t}</option>`).join('')}</select>
     <label>備註</label><input id="f-note" value="${esc(v.note || '')}" placeholder="例如：記得帶健保卡、地址">
@@ -252,17 +281,29 @@ function openEvent(e, preset = {}) {
     <p class="err" id="f-err"></p>
     <div class="btns" id="f-btns">
       <button class="primary" id="f-save">儲存</button>
-      ${isNew ? '' : `<button id="f-move">📅 移到別天${rep ? '（只搬這一天）' : ''}</button><button id="f-cxl">✕ 取消活動（留紀錄）</button><button id="f-back">移回待安排</button><button class="danger" id="f-del">刪除（不留紀錄）</button>`}
+      ${isNew ? '' : v.allDay ? '<button class="danger" id="f-del">刪除</button>' : `<button id="f-move">📅 移到別天${rep ? '（只搬這一天）' : ''}</button><button id="f-cxl">✕ 取消活動（留紀錄）</button><button id="f-back">移回待安排</button><button class="danger" id="f-del">刪除（不留紀錄）</button>`}
       <button id="f-cancel">取消</button>
     </div>`);
   bindSeg();
   if (isNew) setTimeout(() => $('#f-title').focus(), 50);
   $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('input', () => $('#f-err').textContent = ''));
   $('#f-endsel').onchange = () => { $('#f-endbox').hidden = $('#f-endsel').value !== 'custom'; $('#f-err').textContent = ''; };
+  const paintAll = () => { const on = $('#f-allday').checked; $('#f-timebox').hidden = on; $('#f-daysbox').hidden = !on; };
+  paintAll(); $('#f-allday').onchange = paintAll;
   $('#f-cancel').onclick = closeSheet;
   $('#f-save').onclick = () => {
     const title = $('#f-title').value.trim(), start = $('#f-start').value, date = $('#f-date').value, es = $('#f-endsel').value;
     if (!title) return $('#f-err').textContent = '請先寫要做什麼';
+    if ($('#f-allday').checked) {                           // v0.29 整天／多天
+      if (!date) return $('#f-err').textContent = '請選日期';
+      let endDate = $('#f-enddate').value;
+      if (endDate && endDate < date) return $('#f-err').textContent = '「到哪一天」要在開始那天之後';
+      if (endDate === date) endDate = '';
+      const repeat = endDate ? 'none' : $('#f-repeat').value;
+      const data = { title, owner: segValue(), date, start: '00:00', end: '', repeat, note: $('#f-note').value.trim(), allDay: true, endDate };
+      if (isNew) db.events.push({ id: uid(), ex: [], ...data }); else Object.assign(e, data);
+      save(); closeSheet(); renderEvents(); toast(endDate ? `已儲存（${diffDays(date, endDate) + 1} 天）` : '已儲存'); return;
+    }
     if (!date || !start) return $('#f-err').textContent = '日期和開始時間都要填';
     let end = '';                                     // 「無」＝只記開始時間
     if (es === 'custom') {
@@ -273,7 +314,7 @@ function openEvent(e, preset = {}) {
       if (m > 1439) return $('#f-err').textContent = '超過半夜 12 點了，請改用「自選時間」';
       end = toTime(m);
     }
-    const data = { title, owner: segValue(), date, start, end, repeat: $('#f-repeat').value, note: $('#f-note').value.trim() };
+    const data = { title, owner: segValue(), date, start, end, repeat: $('#f-repeat').value, note: $('#f-note').value.trim(), allDay: false, endDate: '' };
     if (isNew) db.events.push({ id: uid(), ex: [], ...data });
     else if (!rep && data.repeat === 'none' && data.date !== e.date) {      // 單次行程改了日期＝移動，留紀錄
       const from = e.date; moveEventTo(e, from, data.date, data.start, data.end);
@@ -282,7 +323,7 @@ function openEvent(e, preset = {}) {
     save(); closeSheet(); renderEvents(); toast('已儲存');
   };
   if (isNew) return;
-  $('#f-move').onclick = () => {
+  if ($('#f-move')) $('#f-move').onclick = () => {
     const day = rep ? sel : e.date;
     openSheet(`<h3>📅 移到別天</h3><p class="hint">「${esc(e.title)}」原本 ${dayLabel(day)} ${e.start}</p>
       <div class="row2"><div><label>新的日期</label><input id="mv-date" type="date" value="${addDays(day, 1)}"></div>
@@ -302,12 +343,12 @@ function openEvent(e, preset = {}) {
       save(); closeSheet(); render(); toast(to === day ? `已改到 ${start}` : `已移到${dayLabel(to)}`);
     };
   };
-  $('#f-cxl').onclick = () => {
+  if ($('#f-cxl')) $('#f-cxl').onclick = () => {
     const day = rep ? sel : e.date;
     e.end0 = e.end;
     cancelEvent(e, day); save(); closeSheet(); render(); toast(`已取消，${dayLabel(day)}留了紀錄`);
   };
-  $('#f-back').onclick = () => {
+  if ($('#f-back')) $('#f-back').onclick = () => {
     db.todos.push({ id: uid(), title: e.title, owner: e.owner, mins: 0, note: e.note || '' });
     removeEvent(e, rep ? 'one' : 'all');
     toast('已移回待安排');
@@ -630,15 +671,16 @@ function renderMonth() {
   document.body.classList.toggle('th-period', !evMode);
   if (!$('#page-month').hidden) document.querySelector('meta[name=theme-color]').setAttribute('content', evMode ? '#E4F4EC' : '#FDEAE1');
   $('#cycle-log').hidden = evMode; if (!evMode) renderCycleLog(st);
-  $('#m-deco').hidden = !evMode;
+  $('#m-deco').hidden = true;                    // v0.29 Sarah：月曆下面不要人物貓狗
   $('#mgrid').classList.toggle('evmode', evMode);
   $('#legend').innerHTML = evMode
     ? '<span><i class="dot ben"></i>Ben</span><span><i class="dot sarah"></i>Sarah</span><span><i class="dot both"></i>一起</span><span><i class="dot work"></i>公事</span>'
     : '<span><i class="lg period"></i>經期</span><span><i class="lg predict"></i>預測</span><span>💧量</span><span>🤕症狀</span><span>🫧分泌物</span><span>💩大便</span><span>❤️親密</span><span>📝備註</span>';
   $('#m-hint').textContent = evMode
-    ? '左右滑可以換月份。點一下日期看那天的行程；每天、平日重複的行程（例如起床）不會顯示在月曆上。'
+    ? '左右滑可以換月份。點日期可以看、也可以新增行程。整天和好幾天的行程（例如旅行）會變成一條色條；每天、平日重複的（例如起床）不顯示。'
     : '左右滑可以換月份。點一下日期記錄經期和身體狀況；這些紀錄只存在這支手機，不會給別人看到。';
   if (!evMode) renderCycleCard(st, preds);
+  if (evMode) { $('#mgrid').innerHTML = monthWeeks(start, cells, today); return; }
   let h = '';
   for (let i = 0; i < cells; i++) {
     const day = addDays(start, i);
@@ -660,6 +702,37 @@ function renderMonth() {
     h += `<button class="${cls.join(' ')}" data-day="${day}"><span class="num">${parseYmd(day).getDate()}</span>${inner}</button>`;
   }
   $('#mgrid').innerHTML = h;
+}
+
+// v0.29 月曆（行事曆模式）：一週一列、有格線；整天／多天＝實心長條，一般行程＝淡底小格
+function monthWeeks(start, cells, today) {
+  let h = '';
+  for (let w = 0; w < cells / 7; w++) {
+    const ws = addDays(start, w * 7), days = Array.from({ length: 7 }, (_, i) => addDays(ws, i)), we = days[6];
+    const segs = [];
+    db.events.filter(e => e.allDay && !e.ghost).forEach(e => {
+      if (isMulti(e)) {
+        if (e.endDate < ws || e.date > we) return;
+        const a = e.date < ws ? ws : e.date, b = e.endDate > we ? we : e.endDate;
+        segs.push({ c0: diffDays(ws, a), c1: diffDays(ws, b), cls: e.owner, t: e.title, cont: e.date < ws, on: e.endDate > we });
+      } else days.forEach((d, i) => { if (occursOn(e, d)) segs.push({ c0: i, c1: i, cls: e.owner, t: e.title }); });
+    });
+    days.forEach((d, i) => cardReminders(d).forEach(r => segs.push({ c0: i, c1: i, cls: 'card-' + r.kind, t: r.short })));
+    segs.sort((p, q) => (q.c1 - q.c0) - (p.c1 - p.c0) || p.c0 - q.c0);          // 長的先排
+    const lanes = [];
+    segs.forEach(s => { let l = 0; while ((lanes[l] || []).some(o => !(s.c1 < o.c0 || s.c0 > o.c1))) l++; (lanes[l] = lanes[l] || []).push(s); s.lane = l; });
+    h += `<div class="mwk" style="--lanes:${lanes.length}">`;
+    days.forEach(day => {
+      const cls = ['mday']; if (day.slice(0, 7) !== mCur) cls.push('out'); if (day === today) cls.push('today');
+      const evs = db.events.filter(e => !e.allDay && e.repeat !== 'daily' && e.repeat !== 'weekdays' && occursOn(e, day)).sort((a, b) => a.start < b.start ? -1 : 1);
+      const inner = evs.slice(0, 3).map(e => `<span class="mini ${e.owner}${e.ghost ? ' evg' : ''}">${e.ghost === 'moved' ? '↪' : e.ghost ? '✕' : ''}${esc(e.title)}</span>`).join('')
+        + (evs.length > 3 ? `<span class="more">+${evs.length - 3}</span>` : '');
+      h += `<button class="${cls.join(' ')}" data-day="${day}"><span class="num">${parseYmd(day).getDate()}</span><span class="mtimed">${inner}</span></button>`;
+    });
+    h += segs.map(s => `<span class="mbar ${s.cls}${s.cont ? ' cont' : ''}${s.on ? ' on' : ''}" style="--c0:${s.c0};--span:${s.c1 - s.c0 + 1};--lane:${s.lane}">${s.cls === 'both' ? '♥ ' : ''}${esc(s.t)}</span>`).join('');
+    h += '</div>';
+  }
+  return h;
 }
 
 function startPeriod(day, st) {
@@ -686,13 +759,17 @@ function openDay(day, edit = false) {
   const d = parseYmd(day);
   let html = `<h3>${d.getMonth() + 1}月${d.getDate()}日（${WEEK[d.getDay()]}）</h3>`;
   if (mMode === 'events') {
-    html += `<div class="evlist">${evs.length ? evs.map(e => `<button class="evrow ${e.owner}${e.ghost ? ' evg' : ''}" data-goto="1">
-      <span>${e.start}${e.end && !e.ghost ? '–' + e.end : ''}</span>${e.ghost === 'moved' ? `↪ ${esc(e.title)} 移至${e.to ? dayLabel(e.to.date) : '別天'}` : e.ghost ? `✕ ${esc(e.title)} 已取消` : esc(e.title)}${e.from ? `<em class="evnote">↩ 從${dayLabel(e.from.date)}移過來</em>` : ''}${e.note && !e.ghost ? `<em class="evnote">📝 ${esc(e.note)}</em>` : ''}</button>`).join('') : '<p class="hint">這天沒有行程</p>'}</div>
-      <div class="btns"><button class="primary" id="d-add">在這天新增行程</button><button id="d-goto">打開這天的時間軸</button><button id="p-close">關閉</button></div>`;
+    const cards = cardReminders(day);
+    evs.sort((a, b) => (b.allDay ? 1 : 0) - (a.allDay ? 1 : 0));
+    html += `<div class="evlist">${cards.map(c => `<div class="evrow card-${c.kind}"><span>整天</span>${esc(c.title)}</div>`).join('')}${evs.length ? evs.map(e => `<button class="evrow ${e.owner}${e.ghost ? ' evg' : ''}" ${e.allDay ? `data-ev="${e.id}"` : 'data-goto="1"'}>
+      <span>${e.allDay ? (isMulti(e) ? `${md(e.date)}–${md(e.endDate)}` : '整天') : e.start + (e.end && !e.ghost ? '–' + e.end : '')}</span>${e.ghost === 'moved' ? `↪ ${esc(e.title)} 移至${e.to ? dayLabel(e.to.date) : '別天'}` : e.ghost ? `✕ ${esc(e.title)} 已取消` : esc(e.title)}${e.from ? `<em class="evnote">↩ 從${dayLabel(e.from.date)}移過來</em>` : ''}${e.note && !e.ghost ? `<em class="evnote">📝 ${esc(e.note)}</em>` : ''}</button>`).join('') : (cards.length ? '' : '<p class="hint">這天沒有行程</p>')}</div>
+      <div class="btns"><button class="primary" id="d-add">＋ 在這天新增行程</button><button id="d-trip">✈️ 新增一起的多天行程（例如旅行）</button><button id="d-goto">打開這天的時間軸</button><button id="p-close">關閉</button></div>`;
     openSheet(html);
     $('#sheet').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => goDay(day));
     $('#d-goto').onclick = () => goDay(day);
-    $('#d-add').onclick = () => { goDay(day); openEvent(null); };
+    $('#d-add').onclick = () => openEvent(null, { date: day });
+    $('#d-trip').onclick = () => openEvent(null, { date: day, owner: 'both', allDay: true, endDate: addDays(day, 2) });
+    $('#sheet').querySelectorAll('[data-ev]').forEach(b => b.onclick = () => openEvent(db.events.find(x => x.id === b.dataset.ev)));
     $('#p-close').onclick = closeSheet;
     return;
   }
@@ -799,6 +876,13 @@ function slideMonth(n) {
   shiftMonth(n); g.classList.add(n > 0 ? 'slide-l' : 'slide-r');
 }
 const shiftMonth = n => { const [y, m] = mCur.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); mCur = ymd(d).slice(0, 7); renderMonth(); };
+function bindAllDay() {
+  const box = $('#allday'); if (!box) return;
+  box.addEventListener('click', ev => {
+    if (ev.target.closest('#ad-add')) return openEvent(null, { allDay: true });
+    const b = ev.target.closest('[data-id]'); if (b) openEvent(db.events.find(x => x.id === b.dataset.id));
+  });
+}
 function bindMonth() {
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showPage(b.dataset.page));
   // 左右滑換月
@@ -1012,7 +1096,7 @@ function houseOutside() {
 const CAT_DO = ['睡午覺', '散步中', '理毛中', '發呆中', '吃飯中', '爬跳台'], DOG_DO = ['啃骨頭', '睡覺中', '巡邏中', '等吃飯', '搖尾巴', '玩球中'];
 function familyStatus(who) {                 // 從今天的時間軸看現在在做什麼
   const now = new Date(), day = ymd(now), m = now.getHours() * 60 + now.getMinutes();
-  const ev = db.events.filter(e => !e.ghost && occursOn(e, day) && (e.owner === who || e.owner === 'both' || e.owner === 'work'))
+  const ev = db.events.filter(e => !e.ghost && !e.allDay && occursOn(e, day) && (e.owner === who || e.owner === 'both' || e.owner === 'work'))
     .find(e => { const s = toMin(e.start), en = e.end ? toMin(e.end) : s + NO_END_MINS; return m >= s && m < en; });
   return ev ? ev.title : '休息中';
 }
@@ -1356,5 +1440,5 @@ function bindStock() {
 
 $('#m-deco').innerHTML = `<svg viewBox="0 0 220 60"><g transform="translate(40,58) scale(.95)">${charBen()}</g><g transform="translate(78,58) scale(.95)">${charSarah()}</g>
   <g transform="translate(140,56) scale(.75)">${charCat('mdecomask')}</g><g transform="translate(185,56) scale(-.7,.7)">${charDog()}</g></svg>`;
-buildHours(); bind(); bindMove(); bindMonth(); bindStock(); render(); scrollToNow();
+buildHours(); bind(); bindMove(); bindMonth(); bindAllDay(); bindStock(); render(); scrollToNow();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
