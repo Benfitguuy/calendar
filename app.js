@@ -931,13 +931,15 @@ function renderStock() {
   $('#shop-badge').hidden = !shopCount;
   $('#stock-view').hidden = stockTab !== 'stock';
   $('#shop-view').hidden = stockTab !== 'shop';
+  $('#log-view').hidden = stockTab !== 'log';
+  if (stockTab === 'log') renderBuyLog();
   const row = s => {
     const pct = Math.min(100, s.qty / Math.max(s.low * 3, s.qty, 1) * 100), mark = Math.min(100, s.low / Math.max(s.low * 3, s.qty, 1) * 100);
     return `<div class="srow${isLow(s) ? ' low' : ''}" data-id="${s.id}">
       <span class="si">${s.icon}</span>
       <div class="sm"><b data-edit="1">${esc(s.name)}</b><div class="bar"><i style="width:${pct}%"></i><em style="left:${mark}%"></em></div></div>
       <span class="sq">${fmtQty(s.qty)}<small>${esc(s.unit)}</small></span>
-      <span class="spm"><button data-d="-1" aria-label="少一個">−</button><button data-d="1" aria-label="多一個">＋</button></span>
+      ${isLow(s) ? `<button class="sbuy" data-buy="1">🛒 買了</button>` : ''}<span class="spm"><button data-d="-1" aria-label="少一個">−</button><button data-d="1" aria-label="多一個">＋</button></span>
     </div>`;
   };
   if (stockTab === 'stock') {
@@ -971,6 +973,52 @@ function renderStock() {
   if ($('#shop-clear')) $('#shop-clear').onclick = () => { db.shop = db.shop.filter(x => !x.done); save(); renderStock(); };
 }
 
+// ---------- v0.19 購買紀錄：幾號買進來、幾號用完 ----------
+const openBuys = s => (s.buys || []).filter(b => !b.end);
+const dayDiff = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
+const mdd = d => { const x = parseYmd(d); return `${x.getMonth() + 1}/${x.getDate()}`; };
+function avgDays(s) { const f = (s.buys || []).filter(b => b.end); return f.length ? Math.round(f.reduce((t, b) => t + dayDiff(b.date, b.end), 0) / f.length) : null; }
+function renderBuyLog() {
+  const all = db.stock.flatMap(s => (s.buys || []).map(b => ({ s, b }))).sort((x, y) => x.b.date < y.b.date ? 1 : -1);
+  const today = ymd(new Date());
+  const avgs = db.stock.map(s => [s, avgDays(s)]).filter(([, a]) => a !== null);
+  const row = ({ s, b }) => `<button class="blog" data-item="${s.id}" data-buy="${b.id}"><span class="si">${s.icon}</span>
+    <span class="bm"><b>${esc(s.name)} <small>×${fmtQty(b.qty)} ${esc(s.unit)}</small></b>
+    <small>${mdd(b.date)} 買進來 → ${b.end ? `${mdd(b.end)} 用完` : '還在用'}</small></span>
+    <em class="${b.end ? '' : 'using'}">${b.end ? dayDiff(b.date, b.end) + ' 天' : '已 ' + dayDiff(b.date, today) + ' 天'}</em></button>`;
+  $('#log-list').innerHTML =
+    (avgs.length ? `<div class="sec">平均多久用完</div><div class="avgs">${avgs.map(([s, a]) => `<span>${s.icon} ${esc(s.name)} <b>${a} 天</b></span>`).join('')}</div>` : '') +
+    `<div class="sec">購買紀錄（${all.length}）</div>` + (all.map(row).join('') || '<p class="empty">還沒有紀錄。在採買清單或「需要補貨」按「買了」，就會記下購入日期；用到 0 會自動記用完。也可以按下面自己加。</p>') +
+    `<div class="btns"><button class="primary" id="blog-add">＋ 記一筆購買</button></div>`;
+  $('#blog-add').onclick = () => editBuy(null, null);
+  $('#log-list').querySelectorAll('.blog').forEach(el => el.onclick = () => { const s = db.stock.find(z => z.id === el.dataset.item); editBuy(s, s.buys.find(b => b.id === el.dataset.buy)); });
+}
+function editBuy(s, b) {
+  const isNew = !b, v = b || { date: ymd(new Date()), qty: 1, end: '' };
+  if (!db.stock.length) return toast('先在庫存新增用品');
+  openSheet(`<h3>${isNew ? '記一筆購買' : `${s.icon} ${esc(s.name)}`}</h3>
+    ${isNew ? `<label>買了什麼</label><select id="u-item">${db.stock.map(z => `<option value="${z.id}">${z.icon} ${esc(z.name)}</option>`).join('')}</select>` : ''}
+    <div class="row2"><div><label>購入日期</label><input id="u-date" type="date" value="${v.date}"></div><div><label>數量</label><input id="u-qty" type="number" inputmode="decimal" min="0" step="any" value="${v.qty}"></div></div>
+    <label>用完日期（還在用就空白）</label><input id="u-end" type="date" value="${v.end}">
+    <div class="btns"><button id="u-today">今天用完了</button></div>
+    ${isNew ? '<label class="chk"><input type="checkbox" id="u-add" checked> 同時加到庫存數量</label>' : ''}
+    <p class="err" id="u-err"></p>
+    <div class="btns"><button class="primary" id="u-save">儲存</button>${isNew ? '' : '<button class="danger" id="u-del">刪除這筆紀錄</button>'}<button id="u-cancel">取消</button></div>`);
+  $('#u-today').onclick = () => { $('#u-end').value = ymd(new Date()); };
+  $('#u-cancel').onclick = closeSheet;
+  $('#u-save').onclick = () => {
+    const item = isNew ? db.stock.find(z => z.id === $('#u-item').value) : s;
+    const date = $('#u-date').value, end = $('#u-end').value, qty = parseFloat($('#u-qty').value);
+    if (!date) return $('#u-err').textContent = '請選購入日期';
+    if (!(qty > 0)) return $('#u-err').textContent = '數量請填數字';
+    if (end && end < date) return $('#u-err').textContent = '用完日期不能比購入日期早';
+    if (isNew) { (item.buys = item.buys || []).push({ id: uid(), date, qty, end }); if ($('#u-add').checked && !end) item.qty = fmtQty(item.qty + qty); }
+    else Object.assign(b, { date, qty, end });
+    save(); closeSheet(); renderStock(); toast('已儲存');
+  };
+  if (!isNew) $('#u-del').onclick = () => { s.buys = s.buys.filter(z => z !== b); save(); closeSheet(); renderStock(); toast('已刪除'); };
+}
+
 function openStock(s) {
   const isNew = !s;
   const v = s || { name: '', icon: '📦', qty: 1, unit: '個', low: 1, zone: zoneOf(selZone) ? selZone : '' };
@@ -982,6 +1030,7 @@ function openStock(s) {
     <label>圖示</label><div class="icongrid">${ICONS.map(i => `<button type="button" class="${i === v.icon ? 'on' : ''}">${i}</button>`).join('')}</div>
     <div class="row2"><div><label>現在有幾個</label><input id="s-qty" type="number" inputmode="decimal" min="0" step="any" value="${v.qty}"></div>
       <div><label>單位</label><input id="s-unit" value="${esc(v.unit)}" placeholder="瓶、包、顆"></div></div>
+    ${s && (s.buys || []).length ? `<p class="hint">最近一次 ${mdd(s.buys.slice().sort((a, b) => a.date < b.date ? 1 : -1)[0].date)} 買${avgDays(s) !== null ? `・平均 ${avgDays(s)} 天用完` : ''}（看全部：購買紀錄）</p>` : ''}
     <label>剩幾個以下要提醒補貨？</label><input id="s-low" type="number" inputmode="decimal" min="0" step="any" value="${v.low}">
     <p class="err" id="s-err"></p>
     <div class="btns"><button class="primary" id="s-save">儲存</button>
@@ -1007,10 +1056,13 @@ function buyStock(s) {   // 採買清單勾選庫存品 → 問買了幾個，�
   const suggest = Math.max(1, Math.ceil(s.low * 2 - s.qty));
   openSheet(`<h3>${s.icon} ${esc(s.name)} 買了幾${esc(s.unit)}？</h3>
     <input id="b-n" type="number" inputmode="decimal" min="0" step="any" value="${suggest}" class="big">
+    <label>購入日期</label><input id="b-date" type="date" value="${ymd(new Date())}">
     <p class="hint">會加到庫存裡（現在剩 ${fmtQty(s.qty)} ${esc(s.unit)}）</p>
     <div class="btns"><button class="primary" id="b-ok">買好了</button><button id="b-no">取消</button></div>`);
   $('#b-no').onclick = closeSheet;
-  $('#b-ok').onclick = () => { const n = parseFloat($('#b-n').value) || 0; s.qty = fmtQty(s.qty + n); save(); closeSheet(); renderStock(); toast('已補貨'); };
+  $('#b-ok').onclick = () => { const n = parseFloat($('#b-n').value) || 0; s.qty = fmtQty(s.qty + n);
+    if (n > 0) (s.buys = s.buys || []).push({ id: uid(), date: $('#b-date').value || ymd(new Date()), qty: n, end: '' });
+    save(); closeSheet(); renderStock(); toast('已補貨，記在購買紀錄'); };
 }
 
 function bindStock() {
@@ -1024,8 +1076,13 @@ function bindStock() {
   $('#stock-list').onclick = e => {
     const r = e.target.closest('.srow'); if (!r) return;
     const s = db.stock.find(x => x.id === r.dataset.id); if (!s) return;
+    if (e.target.closest('[data-buy]')) return buyStock(s);
     const pm = e.target.closest('[data-d]');
-    if (pm) { s.qty = Math.max(0, fmtQty(s.qty + Number(pm.dataset.d))); save(); renderStock(); return; }
+    if (pm) {
+      s.qty = Math.max(0, fmtQty(s.qty + Number(pm.dataset.d)));
+      if (s.qty === 0 && openBuys(s).length) { openBuys(s).forEach(b => b.end = ymd(new Date())); toast(`${s.name} 用完了，已記在購買紀錄`); }
+      save(); renderStock(); return;
+    }
     openStock(s);
   };
   $('#shop-form').onsubmit = e => {
